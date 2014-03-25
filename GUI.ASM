@@ -284,6 +284,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
         	ret
     		Thankyou:								;点击取消
     			invoke MessageBox, hWin, CTXT("Thank You"), CTXT("Thank You"), MB_OK
+    			mov eax, 0
+    			mov pstatus, eax
     			ret
 		.endif
 		
@@ -406,6 +408,7 @@ shownum endp
 
 initGame proc hWin:DWORD, stRect:RECT
 	;播放声音
+	invoke mciSendString, CTXT("open explosion.mp3 alias explosionmp3 type mpegvideo"), NULL, 0, 0
 	invoke mciSendString, CTXT("open shoot.mp3 alias shootmp3 type mpegvideo"), NULL, 0, 0
 	invoke mciSendString, CTXT("play shootmp3 repeat"), NULL, 0, 0
 	;invoke MessageBox, hWin,CTXT("hello"), CTXT("hello"), MB_OK
@@ -666,8 +669,8 @@ DETECT1:
 			.if edx < 50		;发生碰撞
 				mov eax,2
 				mov pstatus, eax
-				invoke mciSendString, CTXT("open explosion.mp3 alias explosionmp3 type mpegvideo"), NULL, 0, 0
-				invoke mciSendString, CTXT("play explosionmp3"), NULL, 0, 0
+				invoke mciSendString, CTXT("seek explosionmp3 to start"), NULL, 0, 0 ;放完一次指针就会被移到末尾，因此播放前要先移到开头
+				invoke mciSendString, CTXT("play explosionmp3"), NULL, 0, 0			
 			.endif
 		.endif
 		add esi, 16			;数组中的下一个数
