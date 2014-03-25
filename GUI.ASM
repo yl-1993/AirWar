@@ -158,7 +158,7 @@ WinMain proc hInst:DWORD,hPrevInst:DWORD,CmdLine:DWORD,CmdShow:DWORD
 	mov wc.hIconSm, 0
 
 	invoke RegisterClassEx, ADDR wc
-	invoke CreateWindowEx,NULL,ADDR szClassName,CTXT("Air Fighting"),WS_OVERLAPPEDWINDOW,500,60, 375, 630,NULL,NULL,hInst,NULL
+	invoke CreateWindowEx,NULL,ADDR szClassName,CTXT("Air Fighting"),WS_OVERLAPPEDWINDOW,460,20, 450, 675,NULL,NULL,hInst,NULL
 	mov hWnd,eax
 	invoke ShowWindow,hWnd, SW_SHOWNORMAL
 	invoke UpdateWindow,hWnd
@@ -190,7 +190,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		mov eax, WS_CHILD
 		or eax, WS_VISIBLE
 		or eax, BS_DEFPUSHBUTTON
-		invoke CreateWindowEx, NULL, offset pbutton,CTXT("start"), eax, 140,400, 80, 40,hWin,startButtonId,hInstance,NULL
+		invoke CreateWindowEx, NULL, offset pbutton,CTXT("start"), eax, 180,400, 90, 50,hWin,startButtonId,hInstance,NULL
 		;invoke CreateWindow, CTXT("button"), CTXT("start"), , 200, 200, 200, 150, hWin, 1, hInstance, NULL
 		;设置定时器
 		invoke SetTimer, hWin, 1, 30, NULL
@@ -220,17 +220,15 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		mov hdc, eax
 		mov eax, stPs.rcPaint.right
 	;双缓冲
-		invoke GetClientRect, hWin, ADDR stRect
+		;invoke GetClientRect, hWin, ADDR stRect
 	
 		invoke CreateCompatibleDC, hdc
 		mov hdcbuffer, eax
 		invoke SaveDC, hWin
 		mov nhb, eax
-		
-		mov eax, stRect.right
-		sub eax, stRect.left
-		mov ecx, stRect.bottom
-		sub ecx, stRect.top
+		;initGame之后才有clientWidth和clientHeight的值
+		mov eax, clientWidth
+		mov ecx, clientHeight
 		invoke CreateCompatibleBitmap, hdc, eax, ecx
 		
 		mov pbitmap, eax
@@ -253,10 +251,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			invoke drawIcon, graphics, pngImage, Me.x, Me.y, explosion_three, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
 			invoke GetClientRect, hWin, addr stRect
-			mov eax, stRect.right
-			sub eax, stRect.left
-			mov ecx, stRect.bottom
-			sub ecx, stRect.top
+			mov eax, clientWidth
+			mov ecx, clientHeight
 			
 			invoke BitBlt, hdc, 0, 0, eax, ecx, hdcbuffer, 0, 0, SRCCOPY
 
@@ -283,10 +279,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
     			ret
 		.endif
 		invoke GetClientRect, hWin, addr stRect
-		mov eax, stRect.right
-		sub eax, stRect.left
-		mov ecx, stRect.bottom
-		sub ecx, stRect.top
+		mov eax, clientWidth
+		mov ecx, clientHeight
 		;invoke shownum, hWin, eax
 		invoke BitBlt, hdc, 0, 0, eax, ecx, hdcbuffer, 0, 0, SRCCOPY
 
@@ -311,6 +305,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		.elseif wParam == VK_RIGHT
 			;右边缘判断
 			mov eax, clientWidth
+			sub eax, 48
 			.if Me.x >= eax 
 				ret
 			.endif
@@ -332,6 +327,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		.elseif wParam == VK_DOWN
 			;下边缘判断
 			mov eax, clientHeight
+			sub eax, 60
 			.if Me.y >= eax
 				ret
 			.endif
@@ -414,17 +410,15 @@ initGame proc hWin:DWORD, stRect:RECT
 	;invoke DestroyWindow, eax
 	invoke ShowWindow, eax, SW_HIDE
 	mov pstatus, 1
-	mov Me.x, 180
-	mov Me.y, 500
+	mov Me.x, 210
+	mov Me.y, 520
 	mov Me.status, 1
 	invoke GetClientRect, hWin, addr stRect
 	mov eax, stRect.right
 	sub eax, stRect.left
-	sub eax, 48
 	mov clientWidth, eax
 	mov eax, stRect.bottom
 	sub eax, stRect.top
-	sub eax, 60
 	mov clientHeight, eax
 	;invoke UpdateWindow, hWin
 	invoke SendMessage, hWin, WM_PAINT, NULL, NULL
@@ -524,6 +518,7 @@ drawEnemies proc hWin:DWORD, stRect:RECT
 		mov ebx, 61 ;乘以一个素数调整eax
 		imul ebx
 		mov ebx, clientWidth	;除以屏幕的长度
+		sub ebx, 48
 		div ebx			;余数存在edx中
 	T2: ;找到第一个空余位置，新增一辆敌机
 		mov eax, [esi]
@@ -576,7 +571,7 @@ T3:
 		add eax, 12		;将y值加12（该值可根据飞机速度不同进行调整）
 		;判断敌机是否飞出区域
 		mov edx, clientHeight
-		add edx, 30
+		sub edx, 30
 		.if eax > edx
 			mov ebx, esi
 			sub ebx, 8 
