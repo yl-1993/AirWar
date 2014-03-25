@@ -61,6 +61,8 @@ location ends
 	drawBullets proto hWin:DWORD, stRect:RECT
 	;绘制敌机
 	drawEnemies proto hWin:DWORD, stRect:RECT
+	;绘制所有物体
+	drawAllObjects proto g:HANDLE, hWin:DWORD, stRect:RECT
 	;敌机与玩家碰撞检测
 	detectCollideWithPlayer proto hWin:DWORD, stRect:RECT
 	;敌机与子弹的碰撞检测
@@ -244,54 +246,30 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			
 		
 		.elseif pstatus == 1
-			
 			invoke drawIcon, graphics, pngImage, Me.x, Me.y, hero_two, hWin
-			;draw all bullets
-			mov ecx, 40
-			dec ecx
-			mov esi, offset bullets
-		P1:
-			mov eax, [esi]
-			.if eax == 1 ;共计16字节
-				add esi, 4
-				mov ebx, [esi]
-				add esi, 4
-				mov edx, [esi]
-				invoke drawIcon, graphics, pngImage,  ebx, edx, bullet_one, hWin
-				add esi, 8
-			.elseif
-				add esi, 16
-			.endif
-			Loop P1
-			;draw all enemies
-			mov ecx, enemyNum
-			dec ecx
-			mov esi, offset enemies
-		E1:
-			mov eax, [esi]
-			.if eax == 1 ;敌机active，共计24字节
-				add esi, 4
-				mov ebx, [esi]
-				add esi, 4
-				mov edx, [esi]
-				add esi, 12
-				mov eax, [esi]
-				.if eax == 0 ;(无法直接用elseif是为什么)
-					invoke drawIcon, graphics, pngImage,  ebx, edx, ememy_s, hWin
-				.endif
-				.if eax == 1
-					invoke drawIcon, graphics, pngImage,  ebx, edx, ememy_m, hWin
-				.endif
-				;invoke shownum, hWin, 1
-				add esi, 4
-			.elseif;敌机dead或未定义，跳过
-				add esi, 24
-			.endif
-			Loop E1
+			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
 		.elseif pstatus == 2			 ;游戏结束
-			;invoke ExitProcess,0
-			invoke KillTimer, hWin, 1;是否重来
-			invoke MessageBox, hWin, CTXT("Try Again"), CTXT("Try Again"), MB_YESNO
+			;玩家飞机的爆炸效果绘制开始
+			invoke drawIcon, graphics, pngImage, Me.x, Me.y, explosion_three, hWin
+			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
+			invoke GetClientRect, hWin, addr stRect
+			mov eax, stRect.right
+			sub eax, stRect.left
+			mov ecx, stRect.bottom
+			sub ecx, stRect.top
+			
+			invoke BitBlt, hdc, 0, 0, eax, ecx, hdcbuffer, 0, 0, SRCCOPY
+
+			invoke	GdipDeleteGraphics, graphics
+			invoke DeleteObject, pbitmap
+			
+			invoke DeleteDC, hdcbuffer
+			
+			invoke EndPaint, hWin, ADDR stPs
+			;玩家飞机的爆炸效果绘制完毕
+			invoke mciSendString, CTXT("close shootmp3"), NULL, 0, 0 ;关闭声音
+			invoke KillTimer, hWin, 1;关闭计时器
+			invoke MessageBox, hWin, CTXT("Try Again"), CTXT("Try Again"), MB_YESNO;是否重来
 			cmp eax, 6
 			jne    Thankyou
 			invoke clearScreen, hWin, stRect ;点击确定
@@ -302,6 +280,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
         	ret
     		Thankyou:								;点击取消
     			invoke MessageBox, hWin, CTXT("Thank You"), CTXT("Thank You"), MB_OK
+    			ret
 		.endif
 		invoke GetClientRect, hWin, addr stRect
 		mov eax, stRect.right
@@ -325,13 +304,10 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 				ret
 			.endif
 			;向左移动
-			sub Me.x, 6
+			sub Me.x, 9
 			.if eax == 0
 				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 			.endif
-			;invoke GetClientRect, hWin, addr stRect 
-			;invoke InvalidateRect, hWin, addr stRect, 0
-			;invoke SendMessage, hWin, WM_PAINT, NULL, NULL
 		.elseif wParam == VK_RIGHT
 			;右边缘判断
 			mov eax, clientWidth
@@ -339,13 +315,10 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 				ret
 			.endif
 			;向右移动
-			add Me.x, 6
+			add Me.x, 9
 			.if eax == 0
 				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 			.endif
-			;invoke GetClientRect, hWin, addr stRect
-			;invoke InvalidateRect, hWin, addr stRect, 0
-			;invoke SendMessage, hWin, WM_PAINT, NULL, NULL
 		.elseif wParam == VK_UP
 			;上边缘判断
 			.if Me.y == 38
@@ -356,9 +329,6 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.if eax == 0
 				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 			.endif
-			;invoke GetClientRect, hWin, addr stRect 
-			;invoke InvalidateRect, hWin, addr stRect, 0
-			;invoke SendMessage, hWin, WM_PAINT, NULL, NULL
 		.elseif wParam == VK_DOWN
 			;下边缘判断
 			mov eax, clientHeight
@@ -370,9 +340,6 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.if eax == 0
 				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 			.endif
-			;invoke GetClientRect, hWin, addr stRect 
-			;invoke InvalidateRect, hWin, addr stRect, 0
-			;invoke SendMessage, hWin, WM_PAINT, NULL, NULL
 		.elseif wParam == 13 ;按ENTER键开始游戏
 			invoke initGame, hWin, stRect
 		.endif
@@ -437,8 +404,8 @@ shownum endp
 
 initGame proc hWin:DWORD, stRect:RECT
 	;播放声音
-	invoke mciSendString, CTXT("open shoot.mp3 alias mp3 type mpegvideo"), NULL, 0, 0
-	invoke mciSendString, CTXT("play mp3 repeat"), NULL, 0, 0
+	invoke mciSendString, CTXT("open shoot.mp3 alias shootmp3 type mpegvideo"), NULL, 0, 0
+	invoke mciSendString, CTXT("play shootmp3 repeat"), NULL, 0, 0
 	;invoke MessageBox, hWin,CTXT("hello"), CTXT("hello"), MB_OK
 	invoke GetDlgItem, hWin, startButtonId
 	.if eax == 0
@@ -628,6 +595,54 @@ T3:
 	ret
 drawEnemies endp
 
+drawAllObjects proc graphics:HANDLE, hWin:DWORD, stRect:RECT
+	pushad
+		;draw all bullets
+		mov ecx, 40
+		dec ecx
+		mov esi, offset bullets
+	P1:
+		mov eax, [esi]
+		.if eax == 1 ;共计16字节
+			add esi, 4
+			mov ebx, [esi]
+			add esi, 4
+			mov edx, [esi]
+			invoke drawIcon, graphics, pngImage,  ebx, edx, bullet_one, hWin
+			add esi, 8
+		.elseif
+			add esi, 16
+		.endif
+		Loop P1
+		;draw all enemies
+		mov ecx, enemyNum
+		dec ecx
+		mov esi, offset enemies
+	E1:
+		mov eax, [esi]
+		.if eax == 1 ;敌机active，共计24字节
+			add esi, 4
+			mov ebx, [esi]
+			add esi, 4
+			mov edx, [esi]
+			add esi, 12
+			mov eax, [esi]
+			.if eax == 0 ;
+				invoke drawIcon, graphics, pngImage,  ebx, edx, ememy_s, hWin
+			.elseif eax == 1
+				invoke drawIcon, graphics, pngImage,  ebx, edx, ememy_m, hWin
+			.endif
+			;invoke shownum, hWin, 1
+			add esi, 4
+		.elseif;敌机dead或未定义，跳过
+			add esi, 24
+		.endif
+		dec ecx
+		jne E1
+	popad
+	ret
+drawAllObjects endp
+
 detectCollideWithPlayer proc hWin:DWORD, stRect:RECT
 	;循环当前所有的敌机位置，判断是否相撞
 	pushad
@@ -655,17 +670,19 @@ DETECT1:
 				mov edx, Me.y
 				sub edx, eax
 			.endif
-			.if edx < 50
+			.if edx < 50		;发生碰撞
 				mov eax,2
-				;invoke shownum, hWin, 2
 				mov pstatus, eax
+				invoke mciSendString, CTXT("open explosion.mp3 alias explosionmp3 type mpegvideo"), NULL, 0, 0
+				invoke mciSendString, CTXT("play explosionmp3"), NULL, 0, 0
 			.endif
 		.endif
 		add esi, 16			;数组中的下一个数
 	.else
 		add esi, 24
 	.endif
-	LOOP DETECT1
+	dec ecx
+	jne DETECT1
 	popad
 	ret
 detectCollideWithPlayer endp
