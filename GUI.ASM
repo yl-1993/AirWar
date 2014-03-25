@@ -67,6 +67,8 @@ location ends
 	detectCollideWithPlayer proto hWin:DWORD, stRect:RECT
 	;敌机与子弹的碰撞检测
 	detectCollideWithBullets proto hWin:DWORD, stRect:RECT
+	;检测敌机周围有没有子弹
+	detectBulletAroundEnemies proto hWin:DWORD, stRect:RECT, enemyX: DWORD, enemyY: DWORD
 	;清空子弹和敌机
 	clearScreen proto hWin:DWORD, stRect:RECT
 .DATA
@@ -357,7 +359,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			invoke drawBullets, hWin, stRect
 			
 			;判断敌机与子弹是否碰撞，若碰撞绘制爆炸效果
-			
+			invoke detectCollideWithBullets, hWin, stRect
 			;判断飞机与敌机是否碰撞，若碰撞绘制爆炸效果
 			invoke detectCollideWithPlayer, hWin, stRect
 			
@@ -568,7 +570,7 @@ T3:
 		mov eax, 8
 		add esi, eax   ;改变敌机的y值
 		mov eax, [esi] 
-		add eax, 9		;将y值加9（该值可根据飞机速度不同进行调整）
+		add eax, 6		;将y值加9（该值可根据飞机速度不同进行调整）
 		;判断敌机是否飞出区域
 		mov edx, clientHeight
 		sub edx, 10
@@ -621,7 +623,7 @@ drawAllObjects proc graphics:HANDLE, hWin:DWORD, stRect:RECT
 			mov ebx, [esi]
 			add esi, 4
 			mov edx, [esi]
-			add esi, 12
+			add esi, 12	
 			mov eax, [esi]
 			.if eax == 0 ;
 				invoke drawIcon, graphics, pngImage,  ebx, edx, ememy_s, hWin
@@ -682,6 +684,86 @@ DETECT1:
 	popad
 	ret
 detectCollideWithPlayer endp
+
+detectCollideWithBullets proc hWin:DWORD, stRect:RECT
+	pushad
+	mov esi, offset enemies
+	mov ecx, enemyNum
+DETECT2:					;循环检查敌机
+	mov eax, [esi]
+	.if eax == 1
+		add esi, 4
+		mov ebx, [esi]		;x坐标存在ebx中
+		add esi, 4
+		mov edx, [esi]		;y坐标存在edx中
+		;判断(x,y)附件有没有子弹，如果有，飞机和子弹都消失，子弹需在飞机前
+		invoke detectBulletAroundEnemies, hWin, stRect, ebx, edx
+		; eax=0表示有子弹， eax=1表示没子弹
+		.if eax == 0
+			sub esi, 8
+			mov [esi], eax
+			add esi, 8
+			;在飞机消失处(ebx,edx)爆炸，维持30ms
+		.endif
+		add esi, 16
+	.else
+		add esi, 24
+	.endif
+	dec ecx
+	jne DETECT2
+	popad
+	ret
+detectCollideWithBullets endp
+
+detectBulletAroundEnemies proc hWin:DWORD, stRect:RECT, enemyX: DWORD, enemyY: DWORD
+	push ecx
+	push esi
+	push ebx
+	push edx
+	
+	mov esi, offset bullets
+	mov ecx, bulletNum
+DETECT3:
+	mov eax, [esi]
+	.if eax == 1
+		add esi, 4
+		mov ebx, [esi]		;x坐标存在ebx中
+		add esi, 4
+		mov edx, [esi]		;y坐标存在edx中
+		.if edx > enemyY
+			sub edx, enemyY
+			.if edx < 20
+				.if enemyX > ebx
+					;invoke shownum, hWin, enemyY
+					mov eax, ebx
+					mov ebx, enemyX
+					sub ebx, eax
+				.else
+					sub ebx, enemyX
+				.endif
+				.if ebx < 30	;该坐标附近有子弹，此子弹消失
+					;invoke shownum, hWin, enemyX
+					sub esi, 8
+					mov eax, 0
+					mov [esi], eax
+					jmp DETECTOVER3
+				.endif
+			.endif
+		.endif
+		add esi, 8
+	.else
+		add esi, 16
+	.endif
+	dec ecx
+	jne DETECT3
+	mov eax, 1
+DETECTOVER3:
+	pop edx
+	pop ebx
+	pop esi
+	pop ecx
+	ret
+detectBulletAroundEnemies endp
 
 clearScreen proc hWin:DWORD, stRect:RECT
 	pushad
