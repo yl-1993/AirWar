@@ -74,6 +74,7 @@ location ends
 	hdc HDC ?
 	path BYTE "bg_02.bmp", 0
 	pngpath BYTE "plane.png", 0
+	btnPngPath BYTE "images/button_bg.png", 0
 	pstatus DWORD 0;0表示开始，1表示大战，2表示结束
 	pbutton BYTE "button", 0
 	pstart BYTE "START", 0
@@ -82,6 +83,7 @@ location ends
 	gdiplusSInput	GdiplusStartupInput <1, NULL, FALSE, FALSE>
 	;png图像的数据
 	pngImage		dd NULL
+	btnPngImage dd NULL
 	pngType		db "PNG", 0
 	bkImage 		dd NULL
 	;用于调试格式化打印数字
@@ -197,7 +199,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		;加载图像资源
 		invoke gdiplusLoadBitmapFromResource, hInstance, 2002, addr pngType, addr bkImage
 		invoke	gdiplusLoadBitmapFromResource, hInstance, 2001, addr pngType, addr pngImage
-
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2000, addr pngType, addr btnPngImage
+		
 	.elseif uMsg == WM_DESTROY
 		invoke PostQuitMessage,NULL
 	.elseif uMsg == WM_COMMAND
@@ -220,15 +223,19 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		mov hdc, eax
 		mov eax, stPs.rcPaint.right
 	;双缓冲
-		;invoke GetClientRect, hWin, ADDR stRect
+		invoke GetClientRect, hWin, ADDR stRect
 	
 		invoke CreateCompatibleDC, hdc
 		mov hdcbuffer, eax
 		invoke SaveDC, hWin
 		mov nhb, eax
 		;initGame之后才有clientWidth和clientHeight的值
-		mov eax, clientWidth
-		mov ecx, clientHeight
+		mov eax, stRect.right
+		sub eax, stRect.left
+		mov clientWidth, eax
+		mov ecx, stRect.bottom
+		sub ecx, stRect.top
+		mov clientHeight, ecx
 		invoke CreateCompatibleBitmap, hdc, eax, ecx
 		
 		mov pbitmap, eax
@@ -237,7 +244,9 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		
 		invoke GdipCreateFromHDC, hdcbuffer, addr graphics
 	
-		invoke GdipDrawImageI, graphics, bkImage, 0, 0	
+		invoke GdipDrawImageI, graphics, bkImage, 0, 0
+		;invoke GdipDrawImageI, graphics, btnPngImage, 120, 200
+		
 		
 		
 		.if pstatus == 0	
@@ -250,7 +259,6 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			;玩家飞机的爆炸效果绘制开始
 			invoke drawIcon, graphics, pngImage, Me.x, Me.y, explosion_three, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
-			invoke GetClientRect, hWin, addr stRect
 			mov eax, clientWidth
 			mov ecx, clientHeight
 			
@@ -278,7 +286,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
     			invoke MessageBox, hWin, CTXT("Thank You"), CTXT("Thank You"), MB_OK
     			ret
 		.endif
-		invoke GetClientRect, hWin, addr stRect
+		
 		mov eax, clientWidth
 		mov ecx, clientHeight
 		;invoke shownum, hWin, eax
@@ -354,11 +362,11 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			invoke detectCollideWithPlayer, hWin, stRect
 			
 		.endif
-		
 		;仅在时钟中绘制图形
+		invoke GetClientRect, hWin, addr stRect 
+		invoke InvalidateRect, hWin, addr stRect, 0
 		invoke SendMessage, hWin, WM_PAINT, NULL, NULL
-		
-		
+
 	.else
 		invoke DefWindowProc,hWin,uMsg,wParam,lParam
 	.endif
@@ -413,13 +421,6 @@ initGame proc hWin:DWORD, stRect:RECT
 	mov Me.x, 210
 	mov Me.y, 520
 	mov Me.status, 1
-	invoke GetClientRect, hWin, addr stRect
-	mov eax, stRect.right
-	sub eax, stRect.left
-	mov clientWidth, eax
-	mov eax, stRect.bottom
-	sub eax, stRect.top
-	mov clientHeight, eax
 	;invoke UpdateWindow, hWin
 	invoke SendMessage, hWin, WM_PAINT, NULL, NULL
 	invoke InvalidateRect, hWin, NULL, 1
@@ -431,9 +432,8 @@ drawBullets proc hWin:DWORD, stRect:RECT
 	pushad
 	mov esi, offset bullets
 	mov ebx, SIZEOF Bullet
-	mov ecx, 40
+	mov ecx, bulletNum
 	dec ecx
-	mov edi, 0
 	mov eax, countBullets
 	;----每8定时器发子弹
 	shr eax, 3
@@ -458,21 +458,21 @@ drawBullets proc hWin:DWORD, stRect:RECT
 			mov eax, 0 
 			mov [esi], eax
 			add esi, 4
-			mov esi, offset bullets
 			
-			;invoke mciSendString, CTXT("close media"), NULL, 0, 0
-			;invoke shownum, hWin, ecx
-			mov ecx, 39
-			
-			jmp T1
+			jmp MOVELABEL1
 		.elseif 
 			add esi, 16
 		.endif
 		loop T0
-		
+	.else
+		jmp T1
 	.endif
 	
-	;子弹运动		
+	;子弹运动	
+	MOVELABEL1:
+		mov esi, offset bullets
+		mov ecx, bulletNum
+		dec ecx
 	T1:
 	
 	mov eax, [esi]
@@ -481,7 +481,7 @@ drawBullets proc hWin:DWORD, stRect:RECT
 		mov eax, 8
 		add esi, eax
 		mov eax, [esi]
-		sub eax, 12
+		sub eax, 12		;子弹运动速度
 		.if eax < 12
 			mov ebx, esi
 			sub ebx, 8 
@@ -493,9 +493,7 @@ drawBullets proc hWin:DWORD, stRect:RECT
 		add esi, 8
 	.endif
 	Loop T1
-	invoke GetClientRect, hWin, addr stRect 
-	invoke InvalidateRect, hWin, addr stRect, 0
-	;invoke SendMessage, hWin, WM_PAINT, NULL, NULL
+	
 	popad
 	ret
 drawBullets endp
@@ -507,7 +505,6 @@ drawEnemies proc hWin:DWORD, stRect:RECT
 	mov ebx, SIZEOF PObject
 	mov ecx, enemyNum
 	dec ecx
-	mov edi, 0
 	mov eax, countSEnemies
 	;----每32时钟产生敌人
 	shr eax, 5
@@ -536,31 +533,28 @@ drawEnemies proc hWin:DWORD, stRect:RECT
 			mov eax, 1 ;敌机的速度为1，待调整
 			mov [esi], eax ; speed
 			add esi, 4
-			mov eax, 0 
-			mov [esi], eax ; hitnum
+			mov eax, 1
+			mov [esi], eax ; hitnum，表示被子弹击中多少次会爆炸
 			add esi, 4
 			invoke GetTickCount ;随机敌机的类型
 			mov ebx, 2
 			div ebx
 			mov [esi], edx ; curtype
 			add esi, 4
-			mov esi, offset enemies
-			
-			;invoke mciSendString, CTXT("close media"), NULL, 0, 0
-			;invoke shownum, hWin, ecx
-			mov ecx, enemyNum-1
-			
-			jmp T3
+			jmp MOVELABLE2
 		.elseif 
 			add esi, 24
 		.endif
 		loop T2
-		
+	.else
+		jmp T3
 	.endif
 
 	;移动已有敌机
-	;rdtsc ;Read Time Stamp Counter 
-
+MOVELABLE2:
+	mov esi, offset enemies
+	mov ecx, enemyNum
+	dec ecx
 T3:
 	mov eax, [esi]
 	
