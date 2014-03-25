@@ -350,8 +350,6 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 	;处理时钟事件
 	.elseif uMsg == WM_TIMER
 		.if pstatus == 1		
-			inc countBullets
-			inc countSEnemies
 			;生成子弹和敌机
 			invoke drawEnemies, hWin, stRect
 			invoke drawBullets, hWin, stRect
@@ -430,14 +428,15 @@ initGame endp
 
 drawBullets proc hWin:DWORD, stRect:RECT
 	pushad
+	inc countBullets
 	mov esi, offset bullets
 	mov ebx, SIZEOF Bullet
 	mov ecx, bulletNum
 	dec ecx
 	mov eax, countBullets
 	;----每8定时器发子弹
-	shr eax, 3
-	.if eax == 1	
+	;shr eax, 3
+	.if eax == 8	
 		mov eax, 0
 		mov countBullets, eax ;定时器清零
 
@@ -482,15 +481,19 @@ drawBullets proc hWin:DWORD, stRect:RECT
 		add esi, eax
 		mov eax, [esi]
 		sub eax, 12		;子弹运动速度
-		.if eax < 12
-			mov ebx, esi
-			sub ebx, 8 
+		.if eax < 9
+			sub esi, 8 
 			mov eax, 0
-			mov [ebx], eax
-		.elseif
+			mov [esi], eax
+			add esi, 8
+			mov eax, 0
+			mov [esi], eax
+		.else
 			mov [esi], eax
 		.endif
 		add esi, 8
+	.else
+		add esi, 16		;跳过status为0的点
 	.endif
 	Loop T1
 	
@@ -501,14 +504,15 @@ drawBullets endp
 
 drawEnemies proc hWin:DWORD, stRect:RECT
 	pushad
+	inc countSEnemies
 	mov esi, offset enemies
 	mov ebx, SIZEOF PObject
 	mov ecx, enemyNum
 	dec ecx
 	mov eax, countSEnemies
 	;----每32时钟产生敌人
-	shr eax, 5
-	.if eax == 1
+	;shr eax, 5
+	.if eax == 32
 		mov eax, 0
 		mov countSEnemies, eax ;计时器清零
 		invoke GetTickCount;用计时器模拟随机
@@ -557,29 +561,29 @@ MOVELABLE2:
 	dec ecx
 T3:
 	mov eax, [esi]
-	
 	.if eax == 1
 		mov eax, 8
 		add esi, eax   ;改变敌机的y值
 		mov eax, [esi] 
-		add eax, 12		;将y值加12（该值可根据飞机速度不同进行调整）
+		add eax, 9		;将y值加9（该值可根据飞机速度不同进行调整）
 		;判断敌机是否飞出区域
 		mov edx, clientHeight
-		sub edx, 30
+		sub edx, 10
 		.if eax > edx
-			mov ebx, esi
-			sub ebx, 8 
+			sub esi, 8 
 			mov eax, 0
-			mov [ebx], eax
+			mov [esi], eax
+			add esi,8
+			mov eax, 0
+			mov [esi], eax
 		.elseif
 			mov [esi], eax
 		.endif
 		add esi, 16		;到下一个飞机的坐标
+	.else
+		add esi, 24		;跳过status为0的点
 	.endif
 	Loop T3
-	;invoke GetClientRect, hWin, addr stRect 
-	;invoke InvalidateRect, hWin, addr stRect, 0
-	;invoke SendMessage, hWin, WM_PAINT, NULL, NULL
 	popad
 	ret
 drawEnemies endp
