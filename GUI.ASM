@@ -49,6 +49,7 @@ location struct
 	h DWORD ?
 location ends
 
+
 	WinMain PROTO :DWORD,:DWORD,:DWORD,:DWORD
 	WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
 	;初始化游戏界面
@@ -71,6 +72,8 @@ location ends
 	detectBulletAroundEnemies proto hWin:DWORD, stRect:RECT, enemyX: DWORD, enemyY: DWORD
 	;清空子弹和敌机
 	clearScreen proto hWin:DWORD, stRect:RECT
+	;
+	drawAllExplodsion proto, graphics:HANDLE, hWin:DWORD
 .DATA
 	szClassName db "MASMPlus_Class",0
 	hdc HDC ?
@@ -96,6 +99,8 @@ location ends
 	startButtonId DWORD 10
 	;------------planes-----------------
 	Me Hero <>
+	Explodsion COORD 40 dup(<>)
+	ExplodsionNum DWORD 0
 	enemies PObject 40 dup(<>)
 	bullets Bullet 40 dup(<>)
 	countBullets DWORD ? ;定时器，每8下发一次子弹
@@ -199,7 +204,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		;设置定时器
 		invoke SetTimer, hWin, 1, 30, NULL
 		;加载图像资源
-		invoke gdiplusLoadBitmapFromResource, hInstance, 2002, addr pngType, addr bkImage
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2002, addr pngType, addr bkImage
 		invoke	gdiplusLoadBitmapFromResource, hInstance, 2001, addr pngType, addr pngImage
 		invoke	gdiplusLoadBitmapFromResource, hInstance, 2000, addr pngType, addr btnPngImage
 		
@@ -231,7 +236,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		mov hdcbuffer, eax
 		invoke SaveDC, hWin
 		mov nhb, eax
-		;initGame之后才有clientWidth和clientHeight的值
+	;initGame之后才有clientWidth和clientHeight的值
 		mov eax, stRect.right
 		sub eax, stRect.left
 		mov clientWidth, eax
@@ -257,10 +262,16 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		.elseif pstatus == 1
 			invoke drawIcon, graphics, pngImage, Me.x, Me.y, hero_two, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
+			.if ExplodsionNum != 0
+				invoke drawAllExplodsion, graphics, hWin
+			.endif
 		.elseif pstatus == 2			 ;游戏结束
 			;玩家飞机的爆炸效果绘制开始
 			invoke drawIcon, graphics, pngImage, Me.x, Me.y, explosion_three, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
+			.if ExplodsionNum != 0
+				invoke drawAllExplodsion, graphics, hWin
+			.endif
 			mov eax, clientWidth
 			mov ecx, clientHeight
 			
@@ -686,6 +697,7 @@ DETECT1:
 detectCollideWithPlayer endp
 
 detectCollideWithBullets proc hWin:DWORD, stRect:RECT
+
 	pushad
 	mov esi, offset enemies
 	mov ecx, enemyNum
@@ -704,6 +716,21 @@ DETECT2:					;循环检查敌机
 			mov [esi], eax
 			add esi, 8
 			;在飞机消失处(ebx,edx)爆炸，维持30ms
+			push ecx
+			push eax
+			mov ecx, offset Explodsion
+			mov eax, ExplodsionNum
+			shl eax, 2
+	
+			add ecx, eax
+			mov [ecx], bx
+			
+			
+			add ecx, 2
+			mov [ecx], dx
+			inc ExplodsionNum
+			pop eax
+			pop ecx
 		.endif
 		add esi, 16
 	.else
@@ -792,6 +819,26 @@ clearScreen proc hWin:DWORD, stRect:RECT
 	popad
 	ret
 clearScreen endp
+
+;
+drawAllExplodsion PROC graphics:HANDLE, hWin:DWORD
+	pushad
+	mov ecx, ExplodsionNum
+	mov esi, offset Explodsion
+	;invoke shownum, hWin, ecx
+	
+E1:
+	mov bx, [esi]
+	;invoke shownum, hWin, ebx
+	add esi, 2
+	mov dx, [esi]
+	add esi, 2
+	invoke drawIcon, graphics, pngImage,  ebx, edx, explosion_one, hWin
+	loop E1
+ 	mov ExplodsionNum, 0
+	ret
+	popad
+drawAllExplodsion endp
 
 gdiplusLoadBitmapFromResource proc hInst:HMODULE, lpName:LPSTR, lpType:LPSTR, pBitmapFromStream:DWORD
 
