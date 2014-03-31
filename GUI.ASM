@@ -321,7 +321,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 				ret
 			.endif
 			;向左移动
-			sub Me.x, 9
+			sub Me.x, 18
 			.if eax == 0
 				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 			.endif
@@ -333,7 +333,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 				ret
 			.endif
 			;向右移动
-			add Me.x, 9
+			add Me.x, 18
 			.if eax == 0
 				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 			.endif
@@ -364,7 +364,9 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		.endif
 	;处理时钟事件
 	.elseif uMsg == WM_TIMER
-		.if pstatus == 1		
+		
+		.if pstatus == 1
+			
 			;生成子弹和敌机
 			invoke drawEnemies, hWin, stRect
 			invoke drawBullets, hWin, stRect
@@ -422,8 +424,23 @@ shownum endp
 initGame proc hWin:DWORD, stRect:RECT
 	;播放声音
 	invoke mciSendString, CTXT("open explosion.mp3 alias explosionmp3 type mpegvideo"), NULL, 0, 0
+		invoke mciSendString, CTXT("open small_plane_killed.wav alias small type mpegvideo"), NULL, 0, 0
 	invoke mciSendString, CTXT("open shoot.mp3 alias shootmp3 type mpegvideo"), NULL, 0, 0
-	invoke mciSendString, CTXT("play shootmp3 repeat"), NULL, 0, 0
+	invoke mciSendString, CTXT("open game_music.wav alias game type mpegvideo"), NULL, 0, 0
+	invoke mciSendString, CTXT("open fire_bullet.wav alias game1 type mpegvideo"), NULL, 0, 0
+	invoke mciSendString, CTXT("play game repeat"), NULL, 0, 0
+	invoke mciSendString, CTXT("play game1 repeat"), NULL, 0, 0
+	;mov ecx, 1000
+	;L1:
+	;inc eax
+;	loop L1
+;	invoke mciSendString, CTXT("play game1 repeat"), NULL, 0, 0
+;	mov ecx, 1000
+;	L2:
+;	inc eax
+;	loop L2
+;	invoke mciSendString, CTXT("play game1 repeat"), NULL, 0, 0
+	;invoke mciSendString, CTXT("play shootmp3 repeat"), NULL, 0, 0
 	;invoke MessageBox, hWin,CTXT("hello"), CTXT("hello"), MB_OK
 	invoke GetDlgItem, hWin, startButtonId
 	.if eax == 0
@@ -834,6 +851,8 @@ E1:
 	mov dx, [esi]
 	add esi, 2
 	invoke drawIcon, graphics, pngImage,  ebx, edx, explosion_one, hWin
+		invoke mciSendString, CTXT("seek small to start"), NULL, 0, 0 ;放完一次指针就会被移到末尾，因此播放前要先移到开头
+				invoke mciSendString, CTXT("play small"), NULL, 0, 0			
 	loop E1
  	mov ExplodsionNum, 0
 	ret
