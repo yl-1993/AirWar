@@ -27,6 +27,8 @@ Option Casemap :None
 	detectBulletAroundEnemies proto hWin:DWORD, stRect:RECT, enemyX: DWORD, enemyY: DWORD
 	;清空子弹和敌机
 	clearScreen proto hWin:DWORD, stRect:RECT
+	;画出分数
+	drawNumber proto graphics:DWORD, score:DWORD, hWin:DWORD
 	;
 	drawAllExplodsion proto, graphics:HANDLE, hWin:DWORD
 	;判断鼠标时否在矩形内
@@ -63,6 +65,7 @@ Option Casemap :None
 	continuehoverPng dd ?
 	exitPng dd ?
 	exithoverPng dd ?
+	numberPng dd ?
 	
 
 	pngType		db "PNG", 0
@@ -181,6 +184,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2014, addr pngType, addr continuehoverPng
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2015, addr pngType, addr exitPng
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2016, addr pngType, addr exithoverPng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2017, addr pngType, addr numberPng
 	.elseif uMsg == WM_DESTROY
 		invoke PostQuitMessage,NULL
 	.elseif uMsg == WM_COMMAND
@@ -229,7 +233,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		
 		
 		
-		.if pstatus == 0	
+		.if pstatus == 0
+			 
 			 mov ebx, clientWidth
 			 shr ebx, 1
 			 mov ecx, clientHeight
@@ -267,6 +272,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.if ExplodsionNum != 0
 				invoke drawAllExplodsion, graphics, hWin
 			.endif
+			invoke drawNumber, graphics, score, hWin
 		.elseif pstatus == 3
 			invoke drawIcon, graphics, pausePng, 15, 15, pause_png, hWin
 			invoke drawIcon, graphics, heroPlane, Me.x, Me.y, hero_plane, hWin
@@ -274,7 +280,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.if ExplodsionNum != 0
 				invoke drawAllExplodsion, graphics, hWin
 			.endif
-			
+			invoke drawNumber, graphics, score, hWin
 			
 			.if pstarthover !=2
 				invoke GdipDrawImagePointRectI, graphics, restartPng, restart_loc.x, restart_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
@@ -874,6 +880,7 @@ DETECT2:					;循环检查敌机
 		invoke detectBulletAroundEnemies, hWin, stRect, ebx, edx
 		; eax=0表示有子弹， eax=1表示没子弹
 		.if eax == 0
+			
 			sub esi, 8
 			mov [esi], eax
 			add esi, 8
@@ -891,10 +898,22 @@ DETECT2:					;循环检查敌机
 			add ecx, 2
 			mov [ecx], dx
 			inc ExplodsionNum
+			add esi, 12
+			mov ecx, [esi]
+			.if ecx == 0
+				mov eax, 100
+				add score, eax
+			.elseif ecx == 1
+				mov eax, 200
+				add score, eax
+			.elseif ecx == 2
+				mov eax, 400
+				add score, eax
+			.endif
 			pop eax
 			pop ecx
 		.endif
-		add esi, 16
+		add esi, 4
 	.else
 		add esi, 24
 	.endif
@@ -1032,6 +1051,37 @@ JudgePointInRect proc mx:DWORD, my:DWORD, loc:location, hWin:DWORD
 	pop ebx
 	ret
 JudgePointInRect endp	
-
+drawNumber proc g:DWORD, num:DWORD, h:DWORD
+	local loc:location
+	invoke wsprintf, OFFSET temp, OFFSET stri, num
+	
+	mov esi, offset temp
+	mov ebx, 50
+	mov ecx, 15
+	
+L1:
+	mov eax, 0
+	mov al, [esi]
+	.if eax == 0
+		ret
+	.endif
+	sub eax, 48
+	
+	
+	mov edi, 25
+	mul edi
+	add eax, 5
+	mov loc.x, eax
+	mov loc.y, 0
+	mov loc.w, 15
+	mov loc.h, 25
+	invoke drawIcon, g, numberPng, ebx, ecx, loc, h
+	inc esi
+	add ebx, 18
+	jmp L1
+	ret
+drawNumber endp
+	
+	
 	
 END START
