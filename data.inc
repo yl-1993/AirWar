@@ -29,3 +29,4 @@
 	restart_loc location <120, 300, 80, 23>
 	continue_loc location <120, 340, 80, 23>
 	exit_loc location <120, 380, 80, 23>
+	bk_loc location <0, 1300, 480, 800>

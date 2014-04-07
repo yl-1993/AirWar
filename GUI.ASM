@@ -228,8 +228,15 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		
 		invoke GdipCreateFromHDC, hdcbuffer, addr graphics
 	
-		invoke GdipDrawImageI, graphics, bkImage, 0, 0
+		;invoke GdipDrawImageI, graphics, bkImage, 0, 0
 		;invoke GdipDrawImageI, graphics, btnPngImage, 120, 200
+		invoke drawIcon, graphics, bkImage, 0, 0, bk_loc, hWin
+		mov eax, bk_loc.y
+		sub eax, 1
+		.if eax == 0
+			mov eax, 1300
+		.endif
+		mov bk_loc.y, eax
 		
 		
 		
@@ -304,36 +311,23 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.if ExplodsionNum != 0
 				invoke drawAllExplodsion, graphics, hWin
 			.endif
+			invoke drawNumber, graphics, score, hWin
 			mov eax, clientWidth
 			mov ecx, clientHeight
 			
-			invoke BitBlt, hdc, 0, 0, eax, ecx, hdcbuffer, 0, 0, SRCCOPY
-
-			invoke	GdipDeleteGraphics, graphics
-			invoke DeleteObject, pbitmap
+			.if pstarthover !=2
+				invoke GdipDrawImagePointRectI, graphics, restartPng, restart_loc.x, restart_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.elseif pstarthover == 2
+				invoke GdipDrawImagePointRectI, graphics, restarthoverPng, restart_loc.x, restart_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.endif
+		
+			.if pstarthover != 8
+				invoke GdipDrawImagePointRectI, graphics, exitPng, exit_loc.x, exit_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.elseif pstarthover == 8
+				invoke GdipDrawImagePointRectI, graphics, exithoverPng, exit_loc.x, exit_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.endif
 			
-			invoke DeleteDC, hdcbuffer
 			
-			invoke EndPaint, hWin, ADDR stPs
-			;玩家飞机的爆炸效果绘制完毕
-			invoke mciSendString, CTXT("close shootmp3"), NULL, 0, 0 ;关闭声音
-			invoke KillTimer, hWin, 1;关闭计时器
-			invoke MessageBox, hWin, CTXT("Try Again"), CTXT("Try Again"), MB_YESNO;是否重来
-			cmp eax, 6
-			jne    Thankyou
-			invoke clearScreen, hWin, stRect ;点击确定
-			invoke SetTimer, hWin, 1, 30, NULL
-        	mov eax, 1
-        	mov pstatus, eax
-        	invoke initGame, hWin
-        	ret
-    		Thankyou:								;点击取消
-    			invoke MessageBox, hWin, CTXT("Thank You"), CTXT("Thank You"), MB_OK
-    			mov eax, 0
-    			mov pstatus, eax
-    			ret
-    	;暂停
-    	
     	
 		.endif
 		
@@ -350,52 +344,54 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		invoke EndPaint, hWin, ADDR stPs
 	;处理键盘事件
 	.elseif uMsg == WM_KEYDOWN
-		.if wParam == VK_LEFT
-			;左边缘判断
-			.if Me.x <= 30 
-				ret
+		.if pstatus == 1
+			.if wParam == VK_LEFT
+				;左边缘判断
+				.if Me.x <= 30 
+					ret
+				.endif
+				;向左移动
+				sub Me.x, 18
+				.if eax == 0
+					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
+				.endif
+			.elseif wParam == VK_RIGHT
+				;右边缘判断
+				mov eax, clientWidth
+				sub eax, 48
+				.if Me.x >= eax 
+					ret
+				.endif
+				;向右移动
+				add Me.x, 18
+				.if eax == 0
+					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
+				.endif
+			.elseif wParam == VK_UP
+				;上边缘判断
+				.if Me.y == 38
+					ret
+				.endif
+				;向上移动
+				sub Me.y, 6
+				.if eax == 0
+					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
+				.endif
+			.elseif wParam == VK_DOWN
+				;下边缘判断
+				mov eax, clientHeight
+				sub eax, 60
+				.if Me.y >= eax
+					ret
+				.endif
+				;向下移动
+				add Me.y, 6
+				.if eax == 0
+					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
+				.endif
+			.elseif wParam == 13 ;按ENTER键开始游戏
+				invoke initGame, hWin
 			.endif
-			;向左移动
-			sub Me.x, 18
-			.if eax == 0
-				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
-			.endif
-		.elseif wParam == VK_RIGHT
-			;右边缘判断
-			mov eax, clientWidth
-			sub eax, 48
-			.if Me.x >= eax 
-				ret
-			.endif
-			;向右移动
-			add Me.x, 18
-			.if eax == 0
-				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
-			.endif
-		.elseif wParam == VK_UP
-			;上边缘判断
-			.if Me.y == 38
-				ret
-			.endif
-			;向上移动
-			sub Me.y, 6
-			.if eax == 0
-				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
-			.endif
-		.elseif wParam == VK_DOWN
-			;下边缘判断
-			mov eax, clientHeight
-			sub eax, 60
-			.if Me.y >= eax
-				ret
-			.endif
-			;向下移动
-			add Me.y, 6
-			.if eax == 0
-				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
-			.endif
-		.elseif wParam == 13 ;按ENTER键开始游戏
-			invoke initGame, hWin
 		.endif
 	;处理时钟事件
 	.elseif uMsg == WM_TIMER
@@ -454,7 +450,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.endif
 			mov eax, 0
 			mov pstarthover, eax
-		.elseif pstatus == 3
+		.elseif pstatus > 1
 			mov ebx, lParam
 			and ebx, 0000ffffh
 			mov ecx, lParam
@@ -466,11 +462,12 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 				invoke clearScreen, hWin, stRect
 				invoke initGame, hWin
 			.endif
-			
-			invoke JudgePointInRect, ebx, ecx, continue_loc, hWin
-			.if eax == 1
-				mov ebx, 1
-				mov pstatus, ebx
+			.if pstatus == 3
+				invoke JudgePointInRect, ebx, ecx, continue_loc, hWin
+				.if eax == 1
+					mov ebx, 1
+					mov pstatus, ebx
+				.endif
 			.endif
 			invoke JudgePointInRect, ebx, ecx, exit_loc, hWin
 			.if eax == 1
@@ -507,7 +504,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.endif
 			mov eax, 0
 			mov pstarthover, eax
-		.elseif pstatus == 3
+		.elseif pstatus > 1
 			mov ebx, lParam
 			and ebx, 0000ffffh
 			mov ecx, lParam
