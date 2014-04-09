@@ -24,7 +24,7 @@ Option Casemap :None
 	;敌机与子弹的碰撞检测
 	detectCollideWithBullets proto hWin:DWORD, stRect:RECT
 	;检测敌机周围有没有子弹
-	detectBulletAroundEnemies proto hWin:DWORD, stRect:RECT, enemyX: DWORD, enemyY: DWORD
+	detectBulletAroundEnemies proto hWin:DWORD, stRect:RECT, enemyX: DWORD, enemyY: DWORD, enemyType: DWORD
 	;清空子弹和敌机
 	clearScreen proto hWin:DWORD, stRect:RECT
 	;画出分数
@@ -865,19 +865,25 @@ DETECT1:
 		;记录不同飞机的对角坐标
 		.if eax == 0
 			mov enemyX, ebx
+			add enemyX, 5
 			add ebx, small_plane.w
+			add ebx, 10
 			mov enemyY, edx
 			add edx, small_plane.h
 		.elseif eax == 1
 			mov enemyX, ebx
 			add ebx, big_plane.w
+			add ebx, 10
 			mov enemyY, edx
-			add edx, big_plane.h			
+			add edx, big_plane.h
+			sub edx, 10
 		.elseif eax == 2
 			mov enemyX, ebx
+			sub enemyX, 20
 			add ebx, boss_plane.w
 			mov enemyY, edx
-			add edx, boss_plane.h					
+			add edx, boss_plane.h
+			sub edx, 20
 		.endif
 		;判断X轴是否碰撞
 		mov eax, Me.x
@@ -890,7 +896,7 @@ DETECT1:
 			mov flagX, eax
 		.else
 			add eax, hero_plane.w
-			sub eax, 5
+			
 			.if enemyX < eax
 				mov eax, 1
 			.else
@@ -947,8 +953,10 @@ DETECT2:					;循环检查敌机
 		mov ebx, [esi]		;x坐标存在ebx中
 		add esi, 4
 		mov edx, [esi]		;y坐标存在edx中
+		mov edi, esi 
+		add edi, 12
 		;判断(x,y)附件有没有子弹，如果有，飞机和子弹都消失，子弹需在飞机前
-		invoke detectBulletAroundEnemies, hWin, stRect, ebx, edx
+		invoke detectBulletAroundEnemies, hWin, stRect, ebx, edx, [edi]
 		; eax=0表示有子弹， eax=1表示没子弹
 		.if eax == 0
 			;检测飞机类型，将hitnum--
@@ -1020,12 +1028,43 @@ RECORDOVER:
 	ret
 detectCollideWithBullets endp
 
-detectBulletAroundEnemies proc hWin:DWORD, stRect:RECT, enemyX: DWORD, enemyY: DWORD
+detectBulletAroundEnemies proc hWin:DWORD, stRect:RECT, enemyX1: DWORD, enemyY1: DWORD, enemyType: DWORD
+	local enemyX2: DWORD
+	local enemyY2: DWORD
 	push ecx
 	push esi
 	push ebx
 	push edx
 	
+	;存储x2坐标
+	mov eax, enemyX1
+	mov ecx, eax
+	.if enemyType == 0
+		add eax, small_plane.x
+		add eax, 30
+		sub ecx, 20
+	.elseif enemyType == 1
+		add eax, big_plane.x
+		add eax, 50
+		sub ecx, 20
+	.elseif enemyType == 2
+		add eax, boss_plane.x
+		add eax, 85
+		sub ecx, 40
+	.endif
+	mov enemyX1, ecx
+	mov enemyX2, eax
+	;存储x1坐标
+	mov eax, enemyY1
+	.if enemyType == 0
+		add eax, small_plane.y
+	.elseif enemyType == 1
+		add eax, big_plane.y
+	.elseif enemyType == 2
+		add eax, boss_plane.y
+	.endif
+	mov enemyY2, eax
+
 	mov esi, offset bullets
 	mov ecx, bulletNum
 DETECT3:
@@ -1035,23 +1074,17 @@ DETECT3:
 		mov ebx, [esi]		;x坐标存在ebx中
 		add esi, 4
 		mov edx, [esi]		;y坐标存在edx中
-		.if edx > enemyY
-			sub edx, enemyY
+		.if edx > enemyY1
+			sub edx, enemyY1
 			.if edx < 20
-				.if enemyX > ebx
-					;invoke shownum, hWin, enemyY
-					mov eax, ebx
-					mov ebx, enemyX
-					sub ebx, eax
-				.else
-					sub ebx, enemyX
-				.endif
-				.if ebx < 30	;该坐标附近有子弹，此子弹消失
-					;invoke shownum, hWin, enemyX
-					sub esi, 8
-					mov eax, 0
-					mov [esi], eax
-					jmp DETECTOVER3
+				.if enemyX1 < ebx
+					;invoke shownum, hWin, enemyX2
+					.if ebx < enemyX2 ;该坐标附近有子弹，此子弹消失
+						sub esi, 8
+						mov eax, 0
+						mov [esi], eax
+						jmp DETECTOVER3					
+					.endif
 				.endif
 			.endif
 		.endif
