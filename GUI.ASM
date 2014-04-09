@@ -66,6 +66,9 @@ Option Casemap :None
 	exitPng dd ?
 	exithoverPng dd ?
 	numberPng dd ?
+	smallExplosion dd ?
+	bigExplosion dd ?
+	bossExplosion dd ?
 	
 
 	pngType		db "PNG", 0
@@ -79,7 +82,7 @@ Option Casemap :None
 	;------------planes-----------------
 	Me Hero <>
 	Explodsion ECOORD 40 dup(<>)
-	ExplodsionNum DWORD 0
+	ExplodsionNum DWORD 40
 	enemies PObject 40 dup(<>)
 	bullets Bullet 40 dup(<>)
 	countBullets DWORD ? ;定时器，每8下发一次子弹
@@ -90,8 +93,10 @@ Option Casemap :None
 	clientHeight DWORD ? ;屏幕的宽
 	enemyNum DWORD 40 ;敌机数量的数组大小
 	bulletNum DWORD 40;子弹数量的数组大小 
+	exploNum DWORD 40; 屏幕上爆炸数目的数组大小
 	;TotalNum DWORD 200;PlaneYou 使用的数量
 	score DWORD 0;
+	frameNum DWORD 2
 	
 
 .DATA?
@@ -185,6 +190,10 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2015, addr pngType, addr exitPng
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2016, addr pngType, addr exithoverPng
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2017, addr pngType, addr numberPng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2018, addr pngType, addr smallExplosion
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2019, addr pngType, addr bigExplosion
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2020, addr pngType, addr bossExplosion
+
 	.elseif uMsg == WM_DESTROY
 		invoke PostQuitMessage,NULL
 	.elseif uMsg == WM_COMMAND
@@ -276,17 +285,14 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			invoke drawIcon, graphics, pausePng, 15, 15, pause_png, hWin
 			invoke drawIcon, graphics, heroPlane, Me.x, Me.y, hero_plane, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
-			.if ExplodsionNum != 0
-				invoke drawAllExplodsion, graphics, hWin
-			.endif
+			invoke drawAllExplodsion, graphics, hWin
 			invoke drawScore, graphics, score, hWin
 		.elseif pstatus == 3
 			invoke drawIcon, graphics, pausePng, 15, 15, pause_png, hWin
 			invoke drawIcon, graphics, heroPlane, Me.x, Me.y, hero_plane, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
-			.if ExplodsionNum != 0
-				invoke drawAllExplodsion, graphics, hWin
-			.endif
+			invoke drawAllExplodsion, graphics, hWin
+			
 			invoke drawScore, graphics, score, hWin
 			
 			.if pstarthover !=2
@@ -308,9 +314,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			;玩家飞机的爆炸效果绘制开始
 			invoke drawIcon, graphics, pngImage, Me.x, Me.y, explosion_three, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
-			.if ExplodsionNum != 0
-				invoke drawAllExplodsion, graphics, hWin
-			.endif
+			invoke drawAllExplodsion, graphics, hWin
+			
 			invoke drawScore, graphics, score, hWin
 			mov eax, clientWidth
 			mov ecx, clientHeight
@@ -600,7 +605,7 @@ initGame proc hWin:DWORD
 	;invoke DestroyWindow, eax
 	invoke ShowWindow, eax, SW_HIDE
 	mov pstatus, 1
-	mov Me.x, 210
+	mov Me.x, 180
 	mov Me.y, 520
 	mov Me.status, 1
 	;invoke UpdateWindow, hWin
@@ -702,6 +707,9 @@ drawEnemies proc hWin:DWORD, stRect:RECT
 		invoke GetTickCount;用计时器模拟随机
 		mov ebx, 61 ;乘以一个素数调整eax
 		imul ebx
+		mov bl, al	;交换al和ah
+		mov al, ah
+		mov ah,bl
 		mov ebx, clientWidth	;除以屏幕的长度
 		sub ebx, 48
 		div ebx			;余数存在edx中
@@ -957,26 +965,42 @@ DETECT2:					;循环检查敌机
 				push edi
 				push eax
 				mov edi, offset Explodsion
-				mov eax, ExplodsionNum
-				shl eax, 3
-				add edi, eax
-				mov [edi], ebx
 				
-				add edi, 4
-				mov [edi], edx
-				inc ExplodsionNum
-				add esi, 12
-				mov eax, [esi]
+EXPLORECORD:
+				mov eax, [edi]
 				.if eax == 0
-					mov eax, 100
-					add score, eax
-				.elseif eax == 1
-					mov eax, 200
-					add score, eax
-				.elseif eax == 2
-					mov eax, 400
-					add score, eax
-				.endif
+					mov eax, frameNum
+					mov [edi], eax  ;为了达到肉眼显示要求，每次画n帧
+					
+					add edi, 4
+					mov [edi], ebx
+					
+					add edi, 4
+					mov [edi], edx
+					
+					add edi, 4
+					add esi, 12
+					mov eax, [esi]
+					mov [edi], eax
+					add edi, 4
+					.if eax == 0
+						mov eax, 100
+						add score, eax
+					.elseif eax == 1
+						mov eax, 200
+						add score, eax
+					.elseif eax == 2
+						mov eax, 400
+						add score, eax
+					.endif
+					jmp RECORDOVER  ;找到一个位置
+				.else
+					add edi, 16
+				.endif	
+				dec ExplodsionNum
+				jne EXPLORECORD
+RECORDOVER:
+				mov ExplodsionNum, 40
 				pop eax
 				pop edi
 				add esi, 4
@@ -1077,25 +1101,36 @@ clearScreen endp
 ;
 drawAllExplodsion PROC graphics:HANDLE, hWin:DWORD
 	pushad
-	mov ecx, ExplodsionNum
 	mov esi, offset Explodsion
 	
 AllEX1:
-
-	mov ebx, [esi]
-	add esi, 4
-	mov edx, [esi]
-	add esi, 4
-	invoke drawIcon, graphics, pngImage,  ebx, edx, explosion_one, hWin
-	
-	invoke mciSendString, CTXT("seek small to start"), NULL, 0, 0 ;mciSendString会改ECX的值
-	;invoke shownum, hWin, ecx
-	invoke mciSendString, CTXT("play small"), NULL, 0, 0			
+	mov eax, [esi]
+	.if eax > 0
+		dec eax
+		mov [esi], eax
+		add esi, 4
+		mov ebx, [esi]
+		add esi, 4
+		mov edx, [esi]
+		add esi, 4
+		mov eax, [esi]
+		add esi, 4
+		.if eax == 0
+			invoke drawIcon, graphics, smallExplosion,  ebx, edx, small_explosion, hWin
+		.elseif eax == 1
+			invoke drawIcon, graphics, bigExplosion,  ebx, edx, big_explosion, hWin
+		.elseif eax == 2
+			invoke drawIcon, graphics, bossExplosion,  ebx, edx, boss_explosion, hWin
+		.endif
+		invoke mciSendString, CTXT("seek small to start"), NULL, 0, 0 ;mciSendString会改ECX的值
+		;invoke shownum, hWin, ecx
+		invoke mciSendString, CTXT("play small"), NULL, 0, 0
+	.else
+		add esi, 16
+	.endif
 	dec ExplodsionNum
 	jne AllEX1
-	.if ExplodsionNum != 0
- 		mov ExplodsionNum, 0
- 	.endif
+ 	mov ExplodsionNum, 40
 	ret
 	popad
 drawAllExplodsion endp

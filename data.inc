@@ -30,3 +30,6 @@
 	continue_loc location <120, 340, 80, 23>
 	exit_loc location <120, 380, 80, 23>
 	bk_loc location <0, 1300, 480, 800>
+	small_explosion location <0, 0, 23, 19>
+	big_explosion location <0, 0, 35, 43>
+	boss_explosion location <0, 0, 84, 121>
