@@ -3,57 +3,12 @@
 .386
 .Model Flat, StdCall
 Option Casemap :None
-
-Include windows.inc
-Include user32.inc
-Include kernel32.inc
-Include gdi32.inc
-include winmm.inc
-includelib winmm.lib
-includelib gdi32.lib
-IncludeLib user32.lib
-IncludeLib kernel32.lib
-include macro.asm
-include gdiplus.inc
-includelib gdiplus.lib
-include ole32.inc
-includelib ole32.lib
-gdiplusLoadBitmapFromResource proto :HMODULE, :LPSTR, :LPSTR, :DWORD
-;定义飞机
-Hero struct
-	x DWORD ?
-	y DWORD ?
-	status DWORD ?
-Hero ends
-;定义子弹
-Bullet struct
-	status DWORD ?
-	x DWORD ?
-	y DWORD ?
-	curtype DWORD ?
-Bullet ends
-;定义敌人
-PObject struct
-	status DWORD 0;0 dead, 1 active
-	x DWORD ?
-	y DWORD 0
-	speed DWORD 1;initial 1
-	hitnum DWORD 0
-	curtype DWORD 0;0 small plane, 1 big plane, 2 boss plane, 3 bullet_zero, 4, bullet_one
-PObject ends
-;定义png图像上各个元素的位置
-location struct
-	x DWORD ?
-	y DWORD ?
-	w DWORD ?
-	h DWORD ?
-location ends
-
-
+	include struct.inc
+	include data.inc
 	WinMain PROTO :DWORD,:DWORD,:DWORD,:DWORD
 	WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
 	;初始化游戏界面
-	initGame proto hWin:DWORD, stRect:RECT
+	initGame proto hWin:DWORD
 	;画出某个icon(x, y)中心坐标，loc为相应对象的location对象
 	drawIcon proto g:HANDLE, png:DWORD, x:DWORD, y:DWORD, loc:location, :DWORD
 	;打印某个数字
@@ -72,8 +27,13 @@ location ends
 	detectBulletAroundEnemies proto hWin:DWORD, stRect:RECT, enemyX: DWORD, enemyY: DWORD
 	;清空子弹和敌机
 	clearScreen proto hWin:DWORD, stRect:RECT
+	;画出分数
+	drawScore proto graphics:DWORD, score:DWORD, hWin:DWORD
 	;
 	drawAllExplodsion proto, graphics:HANDLE, hWin:DWORD
+	;判断鼠标时否在矩形内
+	JudgePointInRect proto x:DWORD, y:DWORD, rect:location, hWin:DWORD 
+	
 .DATA
 	szClassName db "MASMPlus_Class",0
 	hdc HDC ?
@@ -83,12 +43,31 @@ location ends
 	pstatus DWORD 0;0表示开始，1表示大战，2表示结束
 	pbutton BYTE "button", 0
 	pstart BYTE "START", 0
+	pstarthover DWORD 0
+	
 	;初始化gdi+对象
 	gdiplusToken	dd ?
 	gdiplusSInput	GdiplusStartupInput <1, NULL, FALSE, FALSE>
 	;png图像的数据
 	pngImage		dd NULL
+	bigPlane dd ?
+	smallPlane dd ?
+	bossPlane dd ?
+	heroPlane dd ?
+	pausePng dd ?
+	bulletPng dd ?
 	btnPngImage dd NULL
+	btnhoverPngImage dd NULL
+	airwarPng dd ?
+	restartPng dd ?
+	restarthoverPng dd ?
+	continuePng dd ?
+	continuehoverPng dd ?
+	exitPng dd ?
+	exithoverPng dd ?
+	numberPng dd ?
+	
+
 	pngType		db "PNG", 0
 	bkImage 		dd NULL
 	;用于调试格式化打印数字
@@ -99,7 +78,7 @@ location ends
 	startButtonId DWORD 10
 	;------------planes-----------------
 	Me Hero <>
-	Explodsion COORD 40 dup(<>)
+	Explodsion ECOORD 40 dup(<>)
 	ExplodsionNum DWORD 0
 	enemies PObject 40 dup(<>)
 	bullets Bullet 40 dup(<>)
@@ -112,25 +91,9 @@ location ends
 	enemyNum DWORD 40 ;敌机数量的数组大小
 	bulletNum DWORD 40;子弹数量的数组大小 
 	;TotalNum DWORD 200;PlaneYou 使用的数量
+	score DWORD 0;
 	
-	;------------png coord----------
-	bomb_add location <144, 134, 29, 46>
-	bomb_icon location <184,117, 30, 29>
-	bullet_zero location <112, 2, 9, 17>
-	bullet_one location <66, 238, 8, 15>
-	bullet_add location <112, 117, 30, 46>
-	ememy_b location <2, 2, 108, 164>
-	ememy_m location <130, 2, 69, 89>
-	ememy_s location <201, 88, 39, 27>
-	explosion_one location <216, 117, 26, 26>
-	explosion_two location <144, 93, 38, 39>
-	explosion_three location <201, 44, 40, 42>
-	hero_one location <66, 168, 62, 68>
-	hero_two location <2, 168, 62, 75>
-	pause_button location <175, 148, 22, 23>
-	resume_buttion location <216, 145, 25, 27>
-	smoke_one location <201, 2, 48, 20>
-	smoke_two location <201, 24, 48, 18>
+
 .DATA?
 	hInstance	dd ?
 
@@ -167,7 +130,7 @@ WinMain proc hInst:DWORD,hPrevInst:DWORD,CmdLine:DWORD,CmdShow:DWORD
 	mov wc.hIconSm, 0
 
 	invoke RegisterClassEx, ADDR wc
-	invoke CreateWindowEx,NULL,ADDR szClassName,CTXT("Air Fighting"),WS_OVERLAPPEDWINDOW,460,20, 450, 675,NULL,NULL,hInst,NULL
+	invoke CreateWindowEx,NULL,ADDR szClassName,CTXT("Air Fighting"),WS_OVERLAPPEDWINDOW,460,20, 360, 700,NULL,NULL,hInst,NULL
 	mov hWnd,eax
 	invoke ShowWindow,hWnd, SW_SHOWNORMAL
 	invoke UpdateWindow,hWnd
@@ -199,7 +162,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		mov eax, WS_CHILD
 		or eax, WS_VISIBLE
 		or eax, BS_DEFPUSHBUTTON
-		invoke CreateWindowEx, NULL, offset pbutton,CTXT("start"), eax, 180,400, 90, 50,hWin,startButtonId,hInstance,NULL
+		;invoke CreateWindowEx, NULL, offset pbutton,CTXT("start"), eax, 180,400, 90, 50,hWin,startButtonId,hInstance,NULL
 		;invoke CreateWindow, CTXT("button"), CTXT("start"), , 200, 200, 200, 150, hWin, 1, hInstance, NULL
 		;设置定时器
 		invoke SetTimer, hWin, 1, 30, NULL
@@ -207,7 +170,21 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2002, addr pngType, addr bkImage
 		invoke	gdiplusLoadBitmapFromResource, hInstance, 2001, addr pngType, addr pngImage
 		invoke	gdiplusLoadBitmapFromResource, hInstance, 2000, addr pngType, addr btnPngImage
-		
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2003, addr pngType, addr bigPlane
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2004, addr pngType, addr smallPlane
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2005, addr pngType, addr bossPlane
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2006, addr pngType, addr heroPlane
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2007, addr pngType, addr pausePng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2008, addr pngType, addr bulletPng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2009, addr pngType, addr airwarPng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2010, addr pngType, addr btnhoverPngImage
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2011, addr pngType, addr restartPng
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2012, addr pngType, addr restarthoverPng
+		invoke	gdiplusLoadBitmapFromResource, hInstance, 2013, addr pngType, addr continuePng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2014, addr pngType, addr continuehoverPng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2015, addr pngType, addr exitPng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2016, addr pngType, addr exithoverPng
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2017, addr pngType, addr numberPng
 	.elseif uMsg == WM_DESTROY
 		invoke PostQuitMessage,NULL
 	.elseif uMsg == WM_COMMAND
@@ -219,7 +196,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			and eax, 0000ffffh
 			;the button is start button
 			.if eax == startButtonId
-				invoke initGame, hWin, stRect
+				invoke initGame, hWin
 			.endif
 		.endif
 		mov eax, 0
@@ -251,19 +228,81 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		
 		invoke GdipCreateFromHDC, hdcbuffer, addr graphics
 	
-		invoke GdipDrawImageI, graphics, bkImage, 0, 0
+		;invoke GdipDrawImageI, graphics, bkImage, 0, 0
 		;invoke GdipDrawImageI, graphics, btnPngImage, 120, 200
+		invoke drawIcon, graphics, bkImage, 0, 0, bk_loc, hWin
+		mov eax, bk_loc.y
+		sub eax, 1
+		.if eax == 0
+			mov eax, 1300
+		.endif
+		mov bk_loc.y, eax
 		
 		
 		
-		.if pstatus == 0	
+		.if pstatus == 0
+			 
+			 mov ebx, clientWidth
+			 shr ebx, 1
+			 mov ecx, clientHeight
+			 shr ecx, 1
+			 sub ecx, 60
+			 sub ebx, 40
+			 invoke drawIcon, graphics, airwarPng, ebx, ecx, air_png, hWin
+			 ;MOV ESI, ptr stRect
+			 add ecx, 140
+			 add ebx, 20
+			 mov edx, btn_png.w
+			 shr edx, 1
+			 mov eax, ebx
+			 sub eax, edx
+			 mov start_loc.x, eax
 			
+			 mov edx, btn_png.h
+			 shr edx, 1
+			 mov eax, ecx
+			 sub eax, edx
+			 mov start_loc.y, eax
+			 
+			 .if pstarthover == 0
+			 	invoke GdipDrawImagePointRectI, graphics, btnPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 .elseif pstarthover == 1
+			 	invoke GdipDrawImagePointRectI, graphics, btnhoverPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 .endif
+			; invoke drawIcon, graphics, btnPngImage,ebx, ecx, btn_png, hWin
+			;mov pstarthover, 0
 		
 		.elseif pstatus == 1
-			invoke drawIcon, graphics, pngImage, Me.x, Me.y, hero_two, hWin
+			invoke drawIcon, graphics, pausePng, 15, 15, pause_png, hWin
+			invoke drawIcon, graphics, heroPlane, Me.x, Me.y, hero_plane, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
 			.if ExplodsionNum != 0
 				invoke drawAllExplodsion, graphics, hWin
+			.endif
+			invoke drawScore, graphics, score, hWin
+		.elseif pstatus == 3
+			invoke drawIcon, graphics, pausePng, 15, 15, pause_png, hWin
+			invoke drawIcon, graphics, heroPlane, Me.x, Me.y, hero_plane, hWin
+			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
+			.if ExplodsionNum != 0
+				invoke drawAllExplodsion, graphics, hWin
+			.endif
+			invoke drawScore, graphics, score, hWin
+			
+			.if pstarthover !=2
+				invoke GdipDrawImagePointRectI, graphics, restartPng, restart_loc.x, restart_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.elseif pstarthover == 2
+				invoke GdipDrawImagePointRectI, graphics, restarthoverPng, restart_loc.x, restart_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.endif
+			.if pstarthover != 4
+				invoke GdipDrawImagePointRectI, graphics, continuePng, continue_loc.x, continue_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.elseif pstarthover == 4
+				invoke GdipDrawImagePointRectI, graphics, continuehoverPng, continue_loc.x, continue_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.endif
+			.if pstarthover != 8
+				invoke GdipDrawImagePointRectI, graphics, exitPng, exit_loc.x, exit_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.elseif pstarthover == 8
+				invoke GdipDrawImagePointRectI, graphics, exithoverPng, exit_loc.x, exit_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			.endif
 		.elseif pstatus == 2			 ;游戏结束
 			;玩家飞机的爆炸效果绘制开始
@@ -272,34 +311,24 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.if ExplodsionNum != 0
 				invoke drawAllExplodsion, graphics, hWin
 			.endif
+			invoke drawScore, graphics, score, hWin
 			mov eax, clientWidth
 			mov ecx, clientHeight
 			
-			invoke BitBlt, hdc, 0, 0, eax, ecx, hdcbuffer, 0, 0, SRCCOPY
-
-			invoke	GdipDeleteGraphics, graphics
-			invoke DeleteObject, pbitmap
+			.if pstarthover !=2
+				invoke GdipDrawImagePointRectI, graphics, restartPng, restart_loc.x, restart_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.elseif pstarthover == 2
+				invoke GdipDrawImagePointRectI, graphics, restarthoverPng, restart_loc.x, restart_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.endif
+		
+			.if pstarthover != 8
+				invoke GdipDrawImagePointRectI, graphics, exitPng, exit_loc.x, exit_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.elseif pstarthover == 8
+				invoke GdipDrawImagePointRectI, graphics, exithoverPng, exit_loc.x, exit_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			.endif
 			
-			invoke DeleteDC, hdcbuffer
 			
-			invoke EndPaint, hWin, ADDR stPs
-			;玩家飞机的爆炸效果绘制完毕
-			invoke mciSendString, CTXT("close shootmp3"), NULL, 0, 0 ;关闭声音
-			invoke KillTimer, hWin, 1;关闭计时器
-			invoke MessageBox, hWin, CTXT("Try Again"), CTXT("Try Again"), MB_YESNO;是否重来
-			cmp eax, 6
-			jne    Thankyou
-			invoke clearScreen, hWin, stRect ;点击确定
-			invoke SetTimer, hWin, 1, 30, NULL
-        	mov eax, 1
-        	mov pstatus, eax
-        	invoke initGame, hWin, stRect    
-        	ret
-    		Thankyou:								;点击取消
-    			invoke MessageBox, hWin, CTXT("Thank You"), CTXT("Thank You"), MB_OK
-    			mov eax, 0
-    			mov pstatus, eax
-    			ret
+    	
 		.endif
 		
 		mov eax, clientWidth
@@ -315,52 +344,54 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		invoke EndPaint, hWin, ADDR stPs
 	;处理键盘事件
 	.elseif uMsg == WM_KEYDOWN
-		.if wParam == VK_LEFT
-			;左边缘判断
-			.if Me.x <= 30 
-				ret
+		.if pstatus == 1
+			.if wParam == VK_LEFT
+				;左边缘判断
+				.if Me.x <= 30 
+					ret
+				.endif
+				;向左移动
+				sub Me.x, 18
+				.if eax == 0
+					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
+				.endif
+			.elseif wParam == VK_RIGHT
+				;右边缘判断
+				mov eax, clientWidth
+				sub eax, 48
+				.if Me.x >= eax 
+					ret
+				.endif
+				;向右移动
+				add Me.x, 18
+				.if eax == 0
+					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
+				.endif
+			.elseif wParam == VK_UP
+				;上边缘判断
+				.if Me.y == 38
+					ret
+				.endif
+				;向上移动
+				sub Me.y, 6
+				.if eax == 0
+					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
+				.endif
+			.elseif wParam == VK_DOWN
+				;下边缘判断
+				mov eax, clientHeight
+				sub eax, 60
+				.if Me.y >= eax
+					ret
+				.endif
+				;向下移动
+				add Me.y, 6
+				.if eax == 0
+					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
+				.endif
+			.elseif wParam == 13 ;按ENTER键开始游戏
+				invoke initGame, hWin
 			.endif
-			;向左移动
-			sub Me.x, 18
-			.if eax == 0
-				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
-			.endif
-		.elseif wParam == VK_RIGHT
-			;右边缘判断
-			mov eax, clientWidth
-			sub eax, 48
-			.if Me.x >= eax 
-				ret
-			.endif
-			;向右移动
-			add Me.x, 18
-			.if eax == 0
-				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
-			.endif
-		.elseif wParam == VK_UP
-			;上边缘判断
-			.if Me.y == 38
-				ret
-			.endif
-			;向上移动
-			sub Me.y, 6
-			.if eax == 0
-				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
-			.endif
-		.elseif wParam == VK_DOWN
-			;下边缘判断
-			mov eax, clientHeight
-			sub eax, 60
-			.if Me.y >= eax
-				ret
-			.endif
-			;向下移动
-			add Me.y, 6
-			.if eax == 0
-				invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
-			.endif
-		.elseif wParam == 13 ;按ENTER键开始游戏
-			invoke initGame, hWin, stRect
 		.endif
 	;处理时钟事件
 	.elseif uMsg == WM_TIMER
@@ -381,7 +412,129 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		invoke GetClientRect, hWin, addr stRect 
 		invoke InvalidateRect, hWin, addr stRect, 0
 		invoke SendMessage, hWin, WM_PAINT, NULL, NULL
-
+	.elseif uMsg==WM_LBUTTONDOWN
+		.if pstatus == 1
+			mov eax, lParam
+			shr eax, 16
+	
+			.if eax < 30
+				mov eax, lParam
+				and eax, 0000ffffh
+				.if eax < 30
+					mov eax, 3
+					mov pstatus, eax
+					;add pstarthover, 0
+					;invoke MessageBox, hWin, CTXT("pause"), CTXT("pause"), MB_OK
+				.endif
+			.endif
+		.elseif pstatus == 0
+			mov eax, lParam
+			and eax, 0000ffffh
+			mov ebx, start_loc.w
+			add ebx, start_loc.x
+			
+			.if eax >start_loc.x 
+				.if eax < ebx
+					mov eax, lParam
+					shr eax, 16
+					mov ebx, start_loc.y
+					add ebx, start_loc.h
+					.if eax > start_loc.y
+						.if eax < ebx
+							invoke initGame, hWin
+							mov eax, 1
+							mov pstatus, eax
+						.endif
+					.endif
+				.endif
+			.endif
+			mov eax, 0
+			mov pstarthover, eax
+		.elseif pstatus > 1
+			mov ebx, lParam
+			and ebx, 0000ffffh
+			mov ecx, lParam
+			shr ecx, 16
+			
+			invoke JudgePointInRect, ebx, ecx, restart_loc, hWin
+			
+			.if eax == 1
+				invoke clearScreen, hWin, stRect
+				mov eax, 0
+				mov score, eax
+				invoke drawScore, graphics, score, hWin
+				invoke initGame, hWin
+			.endif
+			.if pstatus == 3
+				invoke JudgePointInRect, ebx, ecx, continue_loc, hWin
+				.if eax == 1
+					mov ebx, 1
+					mov pstatus, ebx
+				.endif
+			.endif
+			invoke JudgePointInRect, ebx, ecx, exit_loc, hWin
+			.if eax == 1
+				invoke SendMessage, hWin,WM_SYSCOMMAND, SC_CLOSE, 0
+			.endif
+	
+			
+			
+			
+		.endif
+			
+			
+	.elseif uMsg == WM_MOUSEMOVE
+		.if pstatus == 0
+			mov eax, lParam
+			and eax, 0000ffffh
+			mov ebx, start_loc.w
+			add ebx, start_loc.x
+			
+			.if eax >start_loc.x 
+				.if eax < ebx
+					mov eax, lParam
+					shr eax, 16
+					mov ebx, start_loc.y
+					add ebx, start_loc.h
+					.if eax > start_loc.y
+						.if eax < ebx
+							mov eax, 1
+							mov pstarthover, eax
+							ret
+						.endif
+					.endif
+				.endif
+			.endif
+			mov eax, 0
+			mov pstarthover, eax
+		.elseif pstatus > 1
+			mov ebx, lParam
+			and ebx, 0000ffffh
+			mov ecx, lParam
+			shr ecx, 16
+			
+			invoke JudgePointInRect, ebx, ecx, restart_loc, hWin
+			
+			.if eax == 1
+				
+				mov edx, 2
+				mov pstarthover, edx
+			.endif
+			
+			invoke JudgePointInRect, ebx, ecx, continue_loc, hWin
+			.if eax == 1
+				
+				mov edx, 4
+				mov pstarthover, edx
+			.endif
+			invoke JudgePointInRect, ebx, ecx, exit_loc, hWin
+			.if eax == 1
+				
+				mov edx, 8
+				mov pstarthover, edx
+			.endif
+		.endif
+		
 	.else
 		invoke DefWindowProc,hWin,uMsg,wParam,lParam
 	.endif
@@ -421,15 +574,15 @@ shownum proc hWin:DWORD, num:DWORD
 	ret
 shownum endp
 
-initGame proc hWin:DWORD, stRect:RECT
+initGame proc hWin:DWORD
 	;播放声音
 	invoke mciSendString, CTXT("open explosion.mp3 alias explosionmp3 type mpegvideo"), NULL, 0, 0
-	invoke mciSendString, CTXT("open small_plane_killed.wav alias small type mpegvideo"), NULL, 0, 0
-	invoke mciSendString, CTXT("open shoot.mp3 alias shootmp3 type mpegvideo"), NULL, 0, 0
-	invoke mciSendString, CTXT("open game_music.wav alias game type mpegvideo"), NULL, 0, 0
-	invoke mciSendString, CTXT("open fire_bullet.wav alias game1 type mpegvideo"), NULL, 0, 0
+		invoke mciSendString, CTXT("open small_plane_killed.wav alias small type mpegvideo"), NULL, 0, 0
+	;invoke mciSendString, CTXT("open shoot.mp3 alias shootmp3 type mpegvideo"), NULL, 0, 0
+	invoke mciSendString, CTXT("open game.wma alias game type mpegvideo"), NULL, 0, 0
+	;invoke mciSendString, CTXT("open fire_bullet.wav alias game1 type mpegvideo"), NULL, 0, 0
 	invoke mciSendString, CTXT("play game repeat"), NULL, 0, 0
-	invoke mciSendString, CTXT("play game1 repeat"), NULL, 0, 0
+	;invoke mciSendString, CTXT("play game1 repeat"), NULL, 0, 0
 	;mov ecx, 1000
 	;L1:
 	;inc eax
@@ -442,10 +595,8 @@ initGame proc hWin:DWORD, stRect:RECT
 ;	invoke mciSendString, CTXT("play game1 repeat"), NULL, 0, 0
 	;invoke mciSendString, CTXT("play shootmp3 repeat"), NULL, 0, 0
 	;invoke MessageBox, hWin,CTXT("hello"), CTXT("hello"), MB_OK
-	invoke GetDlgItem, hWin, startButtonId
-	.if eax == 0
-		invoke MessageBox, hWin, CTXT("HELLO"), CTXT("HELLO"), MB_OK
-	.endif
+
+
 	;invoke DestroyWindow, eax
 	invoke ShowWindow, eax, SW_HIDE
 	mov pstatus, 1
@@ -634,7 +785,7 @@ drawAllObjects proc graphics:HANDLE, hWin:DWORD, stRect:RECT
 			mov ebx, [esi]
 			add esi, 4
 			mov edx, [esi]
-			invoke drawIcon, graphics, pngImage,  ebx, edx, bullet_one, hWin
+			invoke drawIcon, graphics, bulletPng,  ebx, edx, bullet_png, hWin
 			add esi, 8
 		.elseif
 			add esi, 16
@@ -654,9 +805,9 @@ drawAllObjects proc graphics:HANDLE, hWin:DWORD, stRect:RECT
 			add esi, 12	
 			mov eax, [esi]
 			.if eax == 0 ;
-				invoke drawIcon, graphics, pngImage,  ebx, edx, ememy_s, hWin
+				invoke drawIcon, graphics, smallPlane,  ebx, edx, small_plane, hWin
 			.elseif eax == 1
-				invoke drawIcon, graphics, pngImage,  ebx, edx, ememy_m, hWin
+				invoke drawIcon, graphics, bigPlane,  ebx, edx, big_plane, hWin
 			.endif
 			;invoke shownum, hWin, 1
 			add esi, 4
@@ -674,6 +825,7 @@ detectCollideWithPlayer proc hWin:DWORD, stRect:RECT
 	pushad
 	mov esi, offset enemies
 	mov ecx, enemyNum
+	;依照敌机的不同大小，碰撞范围不同
 DETECT1:
 	mov eax, [esi]
 	.if eax == 1
@@ -701,6 +853,7 @@ DETECT1:
 				mov pstatus, eax
 				invoke mciSendString, CTXT("seek explosionmp3 to start"), NULL, 0, 0 ;放完一次指针就会被移到末尾，因此播放前要先移到开头
 				invoke mciSendString, CTXT("play explosionmp3"), NULL, 0, 0			
+				;invoke shownum, hWin, eax
 			.endif
 		.endif
 		add esi, 16			;数组中的下一个数
@@ -729,27 +882,41 @@ DETECT2:					;循环检查敌机
 		invoke detectBulletAroundEnemies, hWin, stRect, ebx, edx
 		; eax=0表示有子弹， eax=1表示没子弹
 		.if eax == 0
+			
 			sub esi, 8
 			mov [esi], eax
 			add esi, 8
-			;在飞机消失处(ebx,edx)爆炸，维持30ms
-			push ecx
+			;在飞机消失处(ebx,edx)爆炸，维持n ms
+			push edi
 			push eax
-			mov ecx, offset Explodsion
+			mov edi, offset Explodsion
 			mov eax, ExplodsionNum
 			shl eax, 2
-	
-			add ecx, eax
-			mov [ecx], bx
+			add edi, eax
+			mov [edi], ebx
 			
-			add ecx, 2
-			mov [ecx], dx
+			add edi, 4
+			mov [edi], edx
 			inc ExplodsionNum
-			
+			add esi, 12
+			mov eax, [esi]
+			.if eax == 0
+				mov eax, 100
+				add score, eax
+			.elseif eax == 1
+				mov eax, 200
+				add score, eax
+			.elseif eax == 2
+				mov eax, 400
+				add score, eax
+			.endif
 			pop eax
-			pop ecx
+			pop edi
+			
+			add esi, 4
+		.elseif
+			add esi, 16
 		.endif
-		add esi, 16
 	.else
 		add esi, 24
 	.endif
@@ -842,98 +1009,85 @@ drawAllExplodsion PROC graphics:HANDLE, hWin:DWORD
 	pushad
 	mov ecx, ExplodsionNum
 	mov esi, offset Explodsion
-	;invoke shownum, hWin, ecx
 	
-E1:
-	mov bx, [esi]
-	;invoke shownum, hWin, ebx
-	add esi, 2
-	mov dx, [esi]
-	add esi, 2
+AllEX1:
+
+	mov ebx, [esi]
+	add esi, 4
+	mov edx, [esi]
+	add esi, 4
 	invoke drawIcon, graphics, pngImage,  ebx, edx, explosion_one, hWin
-	invoke mciSendString, CTXT("seek small to start"), NULL, 0, 0 ;放完一次指针就会被移到末尾，因此播放前要先移到开头
+	invoke mciSendString, CTXT("seek small to start"), NULL, 0, 0 ;mciSendString会改ECX的值
+	;invoke shownum, hWin, ecx
 	invoke mciSendString, CTXT("play small"), NULL, 0, 0			
-	;loop E1
- 	mov ExplodsionNum, 0
+	dec ExplodsionNum
+	jne AllEX1
+	.if ExplodsionNum != 0
+ 		mov ExplodsionNum, 0
+ 	.endif
 	ret
 	popad
 drawAllExplodsion endp
 
-gdiplusLoadBitmapFromResource proc hInst:HMODULE, lpName:LPSTR, lpType:LPSTR, pBitmapFromStream:DWORD
-
-	local rcRes:HRSRC
-	local hResData:HRSRC
-	local pResData:HANDLE
-	local sizeOfRes:DWORD
-	local hbuffer:HANDLE
-	local pbuffer:DWORD
-	local pIStream:DWORD
-	local hIStream:DWORD
-
-	; ------------------------------------------------------------------
-	; STEP 1: Find the resource
-	; ------------------------------------------------------------------
-	invoke	FindResource, hInst, lpName, lpType
-	or 		eax, eax
-	jnz		@f
-	jmp		gdiplusLoadBitmapFromResource@Close
-@@:	mov		rcRes, eax
-	
-	; ------------------------------------------------------------------
-	; STEP 2: Load the resource
-	; ------------------------------------------------------------------
-	invoke	LoadResource, hInst, rcRes
-	or		eax, eax
-	jnz		@f
-	ret		; Resource was not loaded
-@@:	mov		hResData, eax
-
-	; ------------------------------------------------------------------
-	; STEP 3: Create a stream to contain our loaded resource
-	; ------------------------------------------------------------------
-	invoke	SizeofResource, hInst, rcRes
-	or		eax, eax
-	jnz		@f
-	jmp		gdiplusLoadBitmapFromResource@Close
-@@:	mov		sizeOfRes, eax
-	
-	invoke	LockResource, hResData
-	or		eax, eax
-	jnz	 	@f
-	jmp		gdiplusLoadBitmapFromResource@Close
-@@:	mov		pResData, eax
-
-	invoke	GlobalAlloc, GMEM_MOVEABLE, sizeOfRes
-	or		eax, eax
-	jnz		@f
-	jmp		gdiplusLoadBitmapFromResource@Close
-@@:	mov		hbuffer, eax
-
-	invoke	GlobalLock, hbuffer
-	mov		pbuffer, eax
-	
-	invoke	RtlMoveMemory, pbuffer, hResData, sizeOfRes
-	invoke	CreateStreamOnHGlobal, pbuffer, FALSE, addr pIStream
-	or		eax, eax
-	jz		@f
-	jmp		gdiplusLoadBitmapFromResource@Close
-@@:	
-
-	; ------------------------------------------------------------------
-	; STEP 4: Create an image object from stream
-	; ------------------------------------------------------------------
-	invoke	GdipCreateBitmapFromStream, pIStream, pBitmapFromStream
-	
-	; ------------------------------------------------------------------
-	; STEP 5: Free all used locks and resources
-	; ------------------------------------------------------------------
-	invoke	GetHGlobalFromStream, pIStream, addr hIStream
-	invoke	GlobalFree, hIStream
-	invoke	GlobalUnlock, hbuffer
-	invoke	GlobalFree, hbuffer
-	
-gdiplusLoadBitmapFromResource@Close:
+JudgePointInRect proc mx:DWORD, my:DWORD, loc:location, hWin:DWORD
+	push ebx
+	push edx
+	push ecx
+	mov eax, 0
+	mov edx, mx
+	mov ecx, my
+	.if edx > loc.x
+		mov ebx, loc.w
+		add ebx, loc.x
+		
+		.if edx < ebx
+			
+			.if ecx > loc.y
+				mov ebx, loc.h
+				add ebx, loc.y
+				.if ecx < ebx
+					
+					mov eax, 1
+				.endif
+			.endif
+		.endif
+	.endif
+	pop ecx
+	pop edx
+	pop ebx
 	ret
-gdiplusLoadBitmapFromResource endp
+JudgePointInRect endp	
+drawScore proc g:DWORD, num:DWORD, h:DWORD
+	local loc:location
+	invoke wsprintf, OFFSET temp, OFFSET stri, num
+	
+	mov esi, offset temp
+	mov ebx, 50
+	mov ecx, 15
+	
+L1:
+	mov eax, 0
+	mov al, [esi]
+	.if eax == 0
+		ret
+	.endif
+	sub eax, 48
+	
+	
+	mov edi, 25
+	mul edi
+	add eax, 5
+	mov loc.x, eax
+	mov loc.y, 0
+	mov loc.w, 15
+	mov loc.h, 25
+	invoke drawIcon, g, numberPng, ebx, ecx, loc, h
+	inc esi
+	add ebx, 18
+	jmp L1
+	ret
+drawScore endp
+	
+	
 	
 END START
