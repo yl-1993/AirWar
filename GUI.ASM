@@ -100,7 +100,9 @@ Option Casemap :None
 	score DWORD 0;
 	frameNum DWORD 3
 	enemySpeed DWORD 4
-	playerHSpeed DWORD 12
+	playerHSpeed DWORD 4
+	playerVSpeed DWORD 4
+	playerDirection DWORD 0;0表示向左, 1表示向右
 	
 
 .DATA?
@@ -284,13 +286,13 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			 
 			 .if pstarthover == 0
 			 	invoke GdipDrawImagePointRectI, graphics, btnPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
-			 	invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	;invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			 .elseif pstarthover == 1
 			 	invoke GdipDrawImagePointRectI, graphics, btnhoverPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
-			 	invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	;invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			 .elseif pstarthover == 2
 			 	invoke GdipDrawImagePointRectI, graphics, btnPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
-			 	invoke GdipDrawImagePointRectI, graphics, cameraHoverImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	;invoke GdipDrawImagePointRectI, graphics, cameraHoverImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			 .endif
 			 
 			; invoke drawIcon, graphics, btnPngImage,ebx, ecx, btn_png, hWin
@@ -368,11 +370,10 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.if wParam == VK_LEFT
 				;左边缘判断
 				.if Me.x <= 30 
+					mov playerDirection, 0
 					ret
 				.endif
-				;向左移动
-				mov ebx, playerHSpeed
-				sub Me.x, ebx
+				mov playerDirection, 1
 				.if eax == 0
 					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 				.endif
@@ -381,21 +382,20 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 				mov eax, clientWidth
 				sub eax, 48
 				.if Me.x >= eax 
+					mov playerDirection, 0
 					ret
 				.endif
-				;向右移动
-				mov ebx, playerHSpeed
-				add Me.x, ebx
+				mov playerDirection, 2
 				.if eax == 0
 					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 				.endif
 			.elseif wParam == VK_UP
 				;上边缘判断
-				.if Me.y == 38
+				.if Me.y <= 38
+					mov playerDirection, 0
 					ret
 				.endif
-				;向上移动
-				sub Me.y, 6
+				mov playerDirection, 3
 				.if eax == 0
 					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 				.endif
@@ -404,22 +404,73 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 				mov eax, clientHeight
 				sub eax, 60
 				.if Me.y >= eax
+					mov playerDirection, 0
 					ret
 				.endif
-				;向下移动
-				add Me.y, 6
+				mov playerDirection, 4
 				.if eax == 0
 					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 				.endif
-			.elseif wParam == 13 ;按ENTER键开始游戏
-				invoke initGame, hWin
+			.endif
+		.endif
+	;按键松开
+	.elseif uMsg == WM_KEYUP
+		.if pstatus == 1
+			.if wParam == VK_LEFT
+				mov playerDirection, 0
+			.elseif wParam == VK_RIGHT
+				mov playerDirection, 0
+			.elseif wParam == VK_UP
+				mov playerDirection, 0
+			.elseif wParam == VK_DOWN
+				mov playerDirection, 0
 			.endif
 		.endif
 	;处理时钟事件
 	.elseif uMsg == WM_TIMER
 		
 		.if pstatus == 1
-			
+			;移动飞机
+			.if playerDirection == 1 
+				;左边缘判断
+				.if Me.x <= 30 
+					mov playerDirection, 0
+				.else
+					;向左移动
+					mov ebx, playerHSpeed
+					sub Me.x, ebx
+				.endif
+			.elseif playerDirection == 2
+				;右边缘判断
+				mov eax, clientWidth
+				sub eax, 48
+				.if Me.x >= eax 
+					mov playerDirection, 0
+				.else
+					;向右移动
+					mov ebx, playerHSpeed
+					add Me.x, ebx				
+				.endif
+			.elseif playerDirection == 3
+				;上边缘判断
+				.if Me.y <= 38
+					mov playerDirection, 0
+				.else
+					mov ebx, playerVSpeed
+					sub Me.y, ebx
+				.endif				
+			.elseif playerDirection == 4
+				;下边缘判断
+				mov eax, clientHeight
+				sub eax, 60
+				.if Me.y >= eax
+					mov playerDirection, 0
+				.else
+					;向下移动
+					mov ebx, playerVSpeed
+					add Me.y, ebx
+				.endif
+			.endif
 			;生成子弹和敌机
 			invoke drawEnemies, hWin, stRect
 			invoke drawBullets, hWin, stRect
@@ -471,7 +522,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 							add ebx, camera_loc.h
 							.if eax < ebx
 								;调用摄像头控制程序
-								invoke shownum, hWin, 1
+								;invoke shownum, hWin, 1
 							.endif
 						.endif
 					.endif
@@ -638,6 +689,7 @@ initGame proc hWin:DWORD
 	mov Me.x, 180
 	mov Me.y, 520
 	mov Me.status, 1
+	mov playerDirection, 0
 	;invoke UpdateWindow, hWin
 	invoke SendMessage, hWin, WM_PAINT, NULL, NULL
 	invoke InvalidateRect, hWin, NULL, 1
