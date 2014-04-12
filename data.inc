@@ -26,6 +26,7 @@
 	btn_png location <0, 0, 80, 23>
 	air_png location <0, 0, 214, 42>
 	start_loc location <0, 0, 80, 23>
+	camera_loc location <0, 0 , 80, 23>
 	restart_loc location <120, 300, 80, 23>
 	continue_loc location <120, 340, 80, 23>
 	exit_loc location <120, 380, 80, 23>

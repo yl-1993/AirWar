@@ -69,6 +69,8 @@ Option Casemap :None
 	smallExplosion dd ?
 	bigExplosion dd ?
 	bossExplosion dd ?
+	cameraImage dd ?
+	cameraHoverImage dd ?
 	
 
 	pngType		db "PNG", 0
@@ -96,7 +98,9 @@ Option Casemap :None
 	exploNum DWORD 40; 屏幕上爆炸数目的数组大小
 	;TotalNum DWORD 200;PlaneYou 使用的数量
 	score DWORD 0;
-	frameNum DWORD 2
+	frameNum DWORD 3
+	enemySpeed DWORD 4
+	playerHSpeed DWORD 12
 	
 
 .DATA?
@@ -170,7 +174,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		;invoke CreateWindowEx, NULL, offset pbutton,CTXT("start"), eax, 180,400, 90, 50,hWin,startButtonId,hInstance,NULL
 		;invoke CreateWindow, CTXT("button"), CTXT("start"), , 200, 200, 200, 150, hWin, 1, hInstance, NULL
 		;设置定时器
-		invoke SetTimer, hWin, 1, 30, NULL
+		invoke SetTimer, hWin, 1, 10, NULL
 		;加载图像资源
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2002, addr pngType, addr bkImage
 		invoke	gdiplusLoadBitmapFromResource, hInstance, 2001, addr pngType, addr pngImage
@@ -193,6 +197,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2018, addr pngType, addr smallExplosion
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2019, addr pngType, addr bigExplosion
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2020, addr pngType, addr bossExplosion
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2021, addr pngType, addr cameraImage
+		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2022, addr pngType, addr cameraHoverImage
 
 	.elseif uMsg == WM_DESTROY
 		invoke PostQuitMessage,NULL
@@ -266,18 +272,27 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			 mov eax, ebx
 			 sub eax, edx
 			 mov start_loc.x, eax
+			 mov camera_loc.x, eax
 			
 			 mov edx, btn_png.h
 			 shr edx, 1
 			 mov eax, ecx
 			 sub eax, edx
 			 mov start_loc.y, eax
+			 add eax, 50
+			 mov camera_loc.y, eax
 			 
 			 .if pstarthover == 0
 			 	invoke GdipDrawImagePointRectI, graphics, btnPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			 .elseif pstarthover == 1
 			 	invoke GdipDrawImagePointRectI, graphics, btnhoverPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 .elseif pstarthover == 2
+			 	invoke GdipDrawImagePointRectI, graphics, btnPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	invoke GdipDrawImagePointRectI, graphics, cameraHoverImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			 .endif
+			 
 			; invoke drawIcon, graphics, btnPngImage,ebx, ecx, btn_png, hWin
 			;mov pstarthover, 0
 		
@@ -356,7 +371,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 					ret
 				.endif
 				;向左移动
-				sub Me.x, 18
+				mov ebx, playerHSpeed
+				sub Me.x, ebx
 				.if eax == 0
 					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 				.endif
@@ -368,7 +384,8 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 					ret
 				.endif
 				;向右移动
-				add Me.x, 18
+				mov ebx, playerHSpeed
+				add Me.x, ebx
 				.if eax == 0
 					invoke MessageBox, hWin, CTXT("H"), CTXT("H"), MB_OK
 				.endif
@@ -449,6 +466,13 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 							invoke initGame, hWin
 							mov eax, 1
 							mov pstatus, eax
+						.elseif eax > camera_loc.y
+							mov ebx, camera_loc.y
+							add ebx, camera_loc.h
+							.if eax < ebx
+								;调用摄像头控制程序
+								invoke shownum, hWin, 1
+							.endif
 						.endif
 					.endif
 				.endif
@@ -506,6 +530,12 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 							mov eax, 1
 							mov pstarthover, eax
 							ret
+						.elseif eax > 450
+							.if eax < 473
+								mov eax, 2
+								mov pstarthover, eax
+								ret
+							.endif
 						.endif
 					.endif
 				.endif
@@ -582,7 +612,7 @@ shownum endp
 initGame proc hWin:DWORD
 	;播放声音
 	invoke mciSendString, CTXT("open explosion.mp3 alias explosionmp3 type mpegvideo"), NULL, 0, 0
-		invoke mciSendString, CTXT("open small_plane_killed.wav alias small type mpegvideo"), NULL, 0, 0
+	invoke mciSendString, CTXT("open small_plane_killed.wav alias small type mpegvideo"), NULL, 0, 0
 	;invoke mciSendString, CTXT("open shoot.mp3 alias shootmp3 type mpegvideo"), NULL, 0, 0
 	invoke mciSendString, CTXT("open game.wma alias game type mpegvideo"), NULL, 0, 0
 	;invoke mciSendString, CTXT("open fire_bullet.wav alias game1 type mpegvideo"), NULL, 0, 0
@@ -766,7 +796,7 @@ T3:
 		mov eax, 8
 		add esi, eax   ;改变敌机的y值
 		mov eax, [esi] 
-		add eax, 6		;将y值加9（该值可根据飞机速度不同进行调整）
+		add eax, enemySpeed		;将y值加enemySpeed（该值可根据飞机速度不同进行调整）
 		;判断敌机是否飞出区域
 		mov edx, clientHeight
 		sub edx, 10
@@ -1042,15 +1072,27 @@ detectBulletAroundEnemies proc hWin:DWORD, stRect:RECT, enemyX1: DWORD, enemyY1:
 	.if enemyType == 0
 		add eax, small_plane.x
 		add eax, 30
-		sub ecx, 20
+		.if ecx < 20
+			mov ecx, 0 
+		.else
+			sub ecx, 20
+		.endif
 	.elseif enemyType == 1
 		add eax, big_plane.x
 		add eax, 50
-		sub ecx, 20
+		.if ecx < 20
+			mov ecx, 0 
+		.else
+			sub ecx, 20
+		.endif
 	.elseif enemyType == 2
 		add eax, boss_plane.x
 		add eax, 85
-		sub ecx, 40
+		.if ecx < 40
+			mov ecx, 0
+		.else
+			sub ecx, 40
+		.endif
 	.endif
 	mov enemyX1, ecx
 	mov enemyX2, eax
