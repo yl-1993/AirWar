@@ -611,10 +611,10 @@ shownum endp
 
 initGame proc hWin:DWORD
 	;≤•∑≈…˘“Ù
-	invoke mciSendString, CTXT("open explosion.mp3 alias explosionmp3 type mpegvideo"), NULL, 0, 0
-	invoke mciSendString, CTXT("open small_plane_killed.wav alias small type mpegvideo"), NULL, 0, 0
+	invoke mciSendString, CTXT("open sound/explosion.mp3 alias explosionmp3 type mpegvideo"), NULL, 0, 0
+	invoke mciSendString, CTXT("open sound/small_plane_killed.wav alias small type mpegvideo"), NULL, 0, 0
 	;invoke mciSendString, CTXT("open shoot.mp3 alias shootmp3 type mpegvideo"), NULL, 0, 0
-	invoke mciSendString, CTXT("open game.wma alias game type mpegvideo"), NULL, 0, 0
+	invoke mciSendString, CTXT("open sound/game.wma alias game type mpegvideo"), NULL, 0, 0
 	;invoke mciSendString, CTXT("open fire_bullet.wav alias game1 type mpegvideo"), NULL, 0, 0
 	invoke mciSendString, CTXT("play game repeat"), NULL, 0, 0
 	;invoke mciSendString, CTXT("play game1 repeat"), NULL, 0, 0
