@@ -5,6 +5,8 @@
 Option Casemap :None
 	include struct.inc
 	include data.inc
+	includelib control.lib
+	detect PROTO :DWORD
 	WinMain PROTO :DWORD,:DWORD,:DWORD,:DWORD
 	WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
 	;初始化游戏界面
@@ -71,7 +73,7 @@ Option Casemap :None
 	bossExplosion dd ?
 	cameraImage dd ?
 	cameraHoverImage dd ?
-	
+	threadHandle dd ?
 
 	pngType		db "PNG", 0
 	bkImage 		dd NULL
@@ -103,7 +105,10 @@ Option Casemap :None
 	playerHSpeed DWORD 4
 	playerVSpeed DWORD 4
 	playerDirection DWORD 0;0表示向左, 1表示向右
-	
+	newThread DWORD ?
+	threadFlag DWORD 0
+
+
 
 .DATA?
 	hInstance	dd ?
@@ -203,6 +208,12 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 		invoke 	gdiplusLoadBitmapFromResource, hInstance, 2022, addr pngType, addr cameraHoverImage
 
 	.elseif uMsg == WM_DESTROY
+		mov eax, 1
+		mov threadFlag, eax
+		.if threadHandle
+			invoke WaitForSingleObject, threadHandle, INFINITE
+			invoke CloseHandle, threadHandle
+		.endif
 		invoke PostQuitMessage,NULL
 	.elseif uMsg == WM_COMMAND
 		mov eax, wParam
@@ -286,19 +297,20 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			 
 			 .if pstarthover == 0
 			 	invoke GdipDrawImagePointRectI, graphics, btnPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
-			 	;invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			 .elseif pstarthover == 1
 			 	invoke GdipDrawImagePointRectI, graphics, btnhoverPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
-			 	;invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	invoke GdipDrawImagePointRectI, graphics, cameraImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			 .elseif pstarthover == 2
 			 	invoke GdipDrawImagePointRectI, graphics, btnPngImage, start_loc.x, start_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
-			 	;invoke GdipDrawImagePointRectI, graphics, cameraHoverImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
+			 	invoke GdipDrawImagePointRectI, graphics, cameraHoverImage, camera_loc.x, camera_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			 .endif
 			 
 			; invoke drawIcon, graphics, btnPngImage,ebx, ecx, btn_png, hWin
 			;mov pstarthover, 0
 		
 		.elseif pstatus == 1
+			
 			invoke drawIcon, graphics, pausePng, 15, 15, pause_png, hWin
 			invoke drawIcon, graphics, heroPlane, Me.x, Me.y, hero_plane, hWin
 			invoke drawAllObjects, graphics, hWin, stRect			;绘制除玩家外所有物体
@@ -336,7 +348,7 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			invoke drawScore, graphics, score, hWin
 			mov eax, clientWidth
 			mov ecx, clientHeight
-			
+			;invoke shownum, hWin, 1
 			.if pstarthover !=2
 				invoke GdipDrawImagePointRectI, graphics, restartPng, restart_loc.x, restart_loc.y, btn_png.x, btn_png.y, btn_png.w, btn_png.h, 2
 			.elseif pstarthover == 2
@@ -522,7 +534,11 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 							add ebx, camera_loc.h
 							.if eax < ebx
 								;调用摄像头控制程序
-								;invoke shownum, hWin, 1
+								invoke CreateThread, NULL, 0, offset detect,addr threadFlag, 0, addr newThread
+								mov threadHandle, eax
+								invoke initGame, hWin
+								mov eax, 1
+								mov pstatus, eax
 							.endif
 						.endif
 					.endif
@@ -556,9 +572,6 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 			.if eax == 1
 				invoke SendMessage, hWin,WM_SYSCOMMAND, SC_CLOSE, 0
 			.endif
-	
-			
-			
 			
 		.endif
 			
@@ -620,7 +633,14 @@ WndProc proc hWin:DWORD,uMsg:DWORD,wParam :DWORD,lParam :DWORD
 				mov pstarthover, edx
 			.endif
 		.endif
-		
+	.elseif uMsg == WM_CLOSE
+		mov eax, 1
+		mov threadFlag, eax
+		.if threadHandle
+			invoke WaitForSingleObject, threadHandle, INFINITE
+			invoke CloseHandle, threadHandle
+		.endif
+		invoke PostQuitMessage,NULL
 	.else
 		invoke DefWindowProc,hWin,uMsg,wParam,lParam
 	.endif
@@ -929,6 +949,9 @@ detectCollideWithPlayer proc hWin:DWORD, stRect:RECT
 	local enemyY:DWORD
 	local flagX:DWORD
 	local flag: DWORD
+	.if pstatus != 1
+		ret
+	.endif
 	pushad
 	mov esi, offset enemies
 	mov ecx, enemyNum
@@ -1011,7 +1034,9 @@ DETECT1:
 			mov eax,2
 			mov pstatus, eax
 			invoke mciSendString, CTXT("seek explosionmp3 to start"), NULL, 0, 0 ;放完一次指针就会被移到末尾，因此播放前要先移到开头
-			invoke mciSendString, CTXT("play explosionmp3"), NULL, 0, 0				
+			invoke mciSendString, CTXT("play explosionmp3"), NULL, 0, 0		
+			;invoke shownum, hWin, 1
+			jmp DETECT1OVER
 		.endif
 		add esi, 16
 	.else
@@ -1019,6 +1044,7 @@ DETECT1:
 	.endif
 	dec ecx
 	jne DETECT1
+DETECT1OVER:
 	popad
 	ret
 detectCollideWithPlayer endp
