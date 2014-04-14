@@ -76,6 +76,7 @@ Option Casemap :None
 	threadHandle dd ?
 
 	pngType		db "PNG", 0
+	iconType		db "ICON", 0
 	bkImage 		dd NULL
 	;用于调试格式化打印数字
 	;--------------temp data to print
